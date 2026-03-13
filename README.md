@@ -70,7 +70,7 @@ EB_BANK_COUNTRY="GB" \
 python3 dosetup.py
 ```
 
-See [Enable Banking's connector list](https://enablebanking.com/connectors/) for supported banks and country codes.
+See [Enable Banking's supported banks](https://enablebanking.com/open-banking-apis) for supported banks and country codes.
 
 ### 5. Configure docker-compose.yml
 
