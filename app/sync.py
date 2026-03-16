@@ -126,7 +126,7 @@ def run():
         db.log_sync("failure", message=msg)
         return False, 0, msg
 
-    last = state.get("last_sync_date")
+    last = state.get("last_sync_date") or config.START_SYNC_DATE or None
     if last:
         date_from = datetime.date.fromisoformat(last)
     else:
@@ -142,7 +142,7 @@ def run():
     try:
         raw = _fetch_transactions(account_uid, date_from)
     except requests.HTTPError as e:
-        msg = f"Enable Banking error: {e}"
+        msg = "Enable Banking returned an error. Your session may have expired."
         log.error(msg)
         db.log_sync("failure", message=msg)
         return False, 0, msg
@@ -241,7 +241,7 @@ def run():
             log.info("Done: %d added, %d confirmed, %d skipped", added, updated, skipped)
 
     except Exception as e:
-        msg = f"Actual error: {e}"
+        msg = "Could not connect to Actual Budget. Check your URL and password."
         log.error(msg)
         db.log_sync("failure", message=msg)
         email_notify.send_failure(msg)

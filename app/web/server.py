@@ -100,6 +100,7 @@ def setup_actual():
         actual_password=config.ACTUAL_PASSWORD,
         actual_sync_id=config.ACTUAL_SYNC_ID,
         actual_account=config.ACTUAL_ACCOUNT,
+        start_sync_date=config.START_SYNC_DATE or __import__('datetime').date.today().isoformat(),
         active="actual",
     )
 
