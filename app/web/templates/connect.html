@@ -68,9 +68,9 @@
       <label style="margin-top:0;">Search your bank</label>
       <div style="position:relative;">
         <input type="text" id="bank-search" placeholder="Type to search 2,500+ European banks..." autocomplete="off" oninput="filterBanks(this.value)" onfocus="showDropdown()">
-        <div id="bank-dropdown" style="display:none;position:fixed;background:#0f1420;border:1px solid #253450;border-radius:8px;max-height:400px;overflow-y:auto;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,0.6);"></div>
+        <div id="bank-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:#0f1420; border:1px solid #253450; border-top:none; border-radius:0 0 6px 6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
       </div>
-      <div id="selected-bank" style="display:none;margin-top:0.75rem;padding:10px 12px;background:#080b12;border:1px solid #3b82f6;border-radius:8px;font-size:13px;align-items:center;justify-content:space-between;">
+      <div id="selected-bank" style="display:none; margin-top:0.75rem; padding:10px 12px; background:#080b12; border:1px solid #253450; border-radius:6px; font-size:13px; align-items:center; justify-content:space-between;">
         <span id="selected-label" style="font-weight:600;color:#e8edf5;"></span>
         <button type="button" onclick="clearBank()" style="background:none;border:none;color:#4a5568;cursor:pointer;font-size:11px;padding:0;">clear</button>
       </div>
@@ -84,68 +84,66 @@
 
   async function loadBanks() {
     try {
-      const resp = await fetch("/banks");
+      const resp = await fetch('/banks');
       allBanks = await resp.json();
-      const q = document.getElementById("bank-search");
+      const q = document.getElementById('bank-search');
       if (q && q.value.trim()) filterBanks(q.value);
-    } catch(e) { console.error("Failed to load banks", e); }
-  }
-
-  function positionDropdown() {
-    const input = document.getElementById("bank-search");
-    const dd = document.getElementById("bank-dropdown");
-    const rect = input.getBoundingClientRect();
-    dd.style.top = (rect.bottom + window.scrollY) + "px";
-    dd.style.left = rect.left + "px";
-    dd.style.width = rect.width + "px";
+    } catch(e) {
+      console.error('Failed to load banks', e);
+    }
   }
 
   function filterBanks(query) {
-    if (!allBanks.length) { loadBanks(); return; }
-    const dd = document.getElementById("bank-dropdown");
-    if (!query.trim()) { dd.style.display = "none"; return; }
+    if (!allBanks.length) loadBanks();
+    const dd = document.getElementById('bank-dropdown');
+    if (!query.trim()) { dd.style.display = 'none'; return; }
     const q = query.toLowerCase();
     const matches = allBanks.filter(b =>
       b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q)
     ).slice(0, 40);
-    if (!matches.length) { dd.style.display = "none"; return; }
-    positionDropdown();
+    if (!matches.length) { dd.style.display = 'none'; return; }
     dd.innerHTML = matches.map(b => `
-      <div onclick="selectBank('${b.name.replace(/'/g, "\\'")}','${b.country}')" style="padding:9px 12px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2a40;" onmouseover="this.style.background='#161d2e'" onmouseout="this.style.background=''">
+      <div onclick="selectBank('${b.name.replace(/'/g, "\'")}','${b.country}')" style="
+        padding:9px 12px; cursor:pointer; font-size:13px;
+        display:flex; justify-content:space-between; align-items:center;
+        border-bottom:1px solid #1e2a40;
+      " onmouseover="this.style.background='#161d2e'" onmouseout="this.style.background=''">
         <span style="color:#e8edf5;">${b.name}</span>
-        <span style="font-size:11px;color:#4a5568;font-family:monospace;">${b.country}</span>
+        <span style="font-size:11px; color:#4a5568; font-family:monospace;">${b.country}</span>
       </div>
-    `).join("");
-    dd.style.display = "block";
+    `).join('');
+    dd.style.display = 'block';
   }
 
   function showDropdown() {
-    const q = document.getElementById("bank-search").value;
-    if (q.trim()) { positionDropdown(); filterBanks(q); }
+    const q = document.getElementById('bank-search').value;
+    if (q.trim()) filterBanks(q);
   }
 
   function selectBank(name, country) {
-    document.getElementById("inp-bank-name").value = name;
-    document.getElementById("inp-bank-country").value = country;
-    document.getElementById("bank-search").value = "";
-    document.getElementById("bank-dropdown").style.display = "none";
-    const sel = document.getElementById("selected-bank");
-    document.getElementById("selected-label").textContent = name + " (" + country + ")";
-    sel.style.display = "flex";
-    document.getElementById("connect-btn").disabled = false;
+    document.getElementById('inp-bank-name').value = name;
+    document.getElementById('inp-bank-country').value = country;
+    document.getElementById('bank-search').value = '';
+    document.getElementById('bank-dropdown').style.display = 'none';
+    const sel = document.getElementById('selected-bank');
+    document.getElementById('selected-label').textContent = name + ' (' + country + ')';
+    sel.style.display = 'flex';
+    document.getElementById('connect-btn').disabled = false;
   }
 
   function clearBank() {
-    document.getElementById("inp-bank-name").value = "";
-    document.getElementById("inp-bank-country").value = "";
-    document.getElementById("bank-search").value = "";
-    document.getElementById("selected-bank").style.display = "none";
-    document.getElementById("connect-btn").disabled = true;
+    document.getElementById('inp-bank-name').value = '';
+    document.getElementById('inp-bank-country').value = '';
+    document.getElementById('bank-search').value = '';
+    document.getElementById('selected-bank').style.display = 'none';
+    document.getElementById('connect-btn').disabled = true;
   }
 
-  document.addEventListener("click", function(e) {
-    const dd = document.getElementById("bank-dropdown");
-    if (dd && !dd.contains(e.target) && e.target.id !== "bank-search") dd.style.display = "none";
+  document.addEventListener('click', function(e) {
+    const dd = document.getElementById('bank-dropdown');
+    if (dd && !dd.contains(e.target) && e.target.id !== 'bank-search') {
+      dd.style.display = 'none';
+    }
   });
 
   loadBanks();
