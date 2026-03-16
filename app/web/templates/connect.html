@@ -20,25 +20,18 @@
 {% if tokens %}
   <div class="card">
     <div class="card-title">Connect your bank</div>
-    <div class="card-sub">Your bank is connected and syncing.</div>
-    <div class="stat-row"><span class="stat-label">Bank</span><span class="stat-value">{{ tokens.bank_name }} ({{ tokens.bank_country }}) <span class="connected-pill">Connected</span></span></div>
-    <div class="stat-row"><span class="stat-label">Session expires</span><span class="stat-value" style="color:{% if days_left is not none and days_left <= 14 %}#fcd34d{% else %}#6ee7b7{% endif %};">{% if days_left is not none %}{{ days_left }} day{{ "s" if days_left != 1 else "" }} remaining{% else %}Unknown{% endif %}</span></div>
-    <div class="actions-row" style="margin-top:1.5rem;">
+    <div class="card-sub">Step 4 of 4 — authorise read-only access via Enable Banking</div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+      <div>
+        <div class="connected-pill">Connected</div>
+        <div style="margin-top:8px; font-size:12px; color:#94a3b8;">{{ tokens.bank_name }} ({{ tokens.bank_country }})</div>
+      </div>
       <form method="POST" action="/disconnect" onsubmit="return confirm('Disconnect your bank? Syncing will stop until you reconnect.');">
         <button type="submit" class="btn btn-danger">Disconnect</button>
       </form>
-      <a href="/status" class="btn btn-ghost">View status &rarr;</a>
-    </div>
-    <div style="margin-top:1.5rem;border-top:1px solid #1e2a40;padding-top:1.5rem;">
-      <div style="font-size:13px;color:#94a3b8;margin-bottom:1rem;">Re-authorise your bank (required every ~180 days)</div>
-      <form method="POST">
-        <input type="hidden" name="action" value="start">
-        <input type="hidden" name="bank_name" value="{{ tokens.bank_name }}">
-        <input type="hidden" name="bank_country" value="{{ tokens.bank_country }}">
-        <button type="submit" class="btn btn-ghost" style="width:100%;">Re-authorise &rarr;</button>
-      </form>
     </div>
   </div>
+  <a href="/status" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Continue to status &rarr;</a>
 
 {% elif auth_url %}
   <div class="card">

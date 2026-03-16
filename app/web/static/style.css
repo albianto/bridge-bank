@@ -1,8 +1,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; }
-body { background: #080b12; color: #e8edf5; font-family: 'Inter', sans-serif; line-height: 1.6; min-height: 100vh; }
+body { background: #080b12; color: #e8edf5; font-family: 'Inter', sans-serif; line-height: 1.6; min-height: 100vh; padding: 3rem 1.5rem 4rem; }
 
-.wrap { max-width: 480px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+.wrap { width: 100%; max-width: 480px; margin: 0 auto; }
 
 /* Logo */
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; margin-bottom: 2rem; }

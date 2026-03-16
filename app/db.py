@@ -60,6 +60,29 @@ def get_recent_syncs(limit: int = 15) -> list:
         ).fetchall()
         return [dict(r) for r in rows]
 
+def get_sync_log_page(page: int = 1, per_page: int = 5) -> dict:
+    with _conn() as conn:
+        _ensure_tables(conn)
+        total = conn.execute("SELECT COUNT(*) FROM sync_log").fetchone()[0]
+        offset = (page - 1) * per_page
+        rows = conn.execute(
+            "SELECT ran_at, status, tx_count, message FROM sync_log ORDER BY id DESC LIMIT ? OFFSET ?",
+            (per_page, offset)
+        ).fetchall()
+        return {
+            "syncs": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": max(1, (total + per_page - 1) // per_page),
+        }
+
+def clear_sync_log():
+    with _conn() as conn:
+        _ensure_tables(conn)
+        conn.execute("DELETE FROM sync_log")
+        conn.commit()
+
 def get_last_sync() -> str:
     with _conn() as conn:
         _ensure_tables(conn)

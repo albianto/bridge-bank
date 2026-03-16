@@ -214,7 +214,9 @@ def status():
     if not config.is_connected():
         return redirect(url_for("connect"))
 
-    syncs     = db.get_recent_syncs(limit=15)
+    page      = request.args.get("page", 1, type=int)
+    log_data  = db.get_sync_log_page(page=page, per_page=5)
+    syncs     = log_data["syncs"]
     days_left = _get_days_left()
     last_sync = db.get_last_sync()
     act_info  = licence.get_activation_info()
@@ -232,6 +234,7 @@ def status():
         days_left=days_left,
         last_sync=last_sync,
         bank_name=config.EB_BANK_NAME,
+        bank_country=config.EB_BANK_COUNTRY,
         actual_account=config.ACTUAL_ACCOUNT,
         sync_time=config.SYNC_TIME,
         notify_email=config.NOTIFY_EMAIL,
@@ -239,12 +242,19 @@ def status():
         activation_limit=act_info["limit"],
         licence_sync_failed=licence_sync_failed,
         licence_limit_reached=(licence_sync_failed and act_info["usage"] >= act_info["limit"] and act_info["limit"] > 0),
+        page=log_data["page"],
+        total_pages=log_data["total_pages"],
         active="status",
     )
 
 # ---------------------------------------------------------------------------
 # Licence deactivate
 # ---------------------------------------------------------------------------
+
+@app.route("/sync/clear", methods=["POST"])
+def clear_sync_log():
+    db.clear_sync_log()
+    return redirect(url_for("status"))
 
 @app.route("/settings/deactivate", methods=["POST"])
 def deactivate_licence():
