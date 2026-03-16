@@ -26,6 +26,7 @@ body { background: #080b12; color: #e8edf5; font-family: 'Inter', sans-serif; li
 .alert-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
 .alert-warn  { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
 .alert-success { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); color: #6ee7b7; }
+.alert-info { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); color: #93c5fd; }
 .alert a { color: inherit; font-weight: 600; }
 
 /* Form */
