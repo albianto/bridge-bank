@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Connect your bank — Bridge Bank{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-title">Connect your bank</div>
+  <div class="card-sub">Authorise read-only access via Enable Banking</div>
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="alert alert-success">Bank connected successfully.</div>
+  {% endif %}
+  {% if tokens %}
+    <div class="stat-row"><span class="stat-label">Bank</span><span class="stat-value">{{ tokens.bank_name }} ({{ tokens.bank_country }}) <span class="connected-pill">Connected</span></span></div>
+    <div class="stat-row"><span class="stat-label">Session expires</span><span class="stat-value" style="color:{% if days_left is not none and days_left <= 14 %}#fcd34d{% else %}#6ee7b7{% endif %};">{% if days_left is not none %}{{ days_left }} day{{ 's' if days_left != 1 else '' }} remaining{% else %}Unknown{% endif %}</span></div>
+    <div class="actions-row" style="margin-top:1.5rem;">
+      <form method="POST" action="/disconnect" onsubmit="return confirm('Disconnect your bank? Syncing will stop until you reconnect.');">
+        <button type="submit" class="btn btn-danger">Disconnect</button>
+      </form>
+      <a href="/status" class="btn btn-ghost">View status &rarr;</a>
+    </div>
+    <div style="margin-top:1.5rem;border-top:1px solid #1e2a40;padding-top:1.5rem;">
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:1rem;">Re-authorise your bank (required every ~180 days)</div>
+      <form method="POST">
+        <input type="hidden" name="action" value="start">
+        <input type="hidden" name="bank_name" value="{{ tokens.bank_name }}">
+        <input type="hidden" name="bank_country" value="{{ tokens.bank_country }}">
+        <button type="submit" class="btn btn-ghost" style="width:100%;">Re-authorise &rarr;</button>
+      </form>
+    </div>
+  {% else %}
+    {% if auth_url %}
+      <div class="alert alert-warn">Open the link below in your browser, log in to your bank, approve access, then come back here.</div>
+      <a href="{{ auth_url }}" target="_blank" class="btn btn-primary" style="margin-top:0.5rem;">Open bank authorisation &rarr;</a>
+      <div style="margin-top:1.5rem;border-top:1px solid #1e2a40;padding-top:1.5rem;">
+        <form method="POST">
+          <input type="hidden" name="action" value="cancel">
+          <button type="submit" class="btn btn-ghost" style="width:100%;">Cancel</button>
+        </form>
+      </div>
+    {% else %}
+      <form method="POST">
+        <input type="hidden" name="action" value="start">
+        <input type="hidden" name="bank_name" value="{{ bank_name }}">
+        <input type="hidden" name="bank_country" value="{{ bank_country }}">
+        <button class="btn btn-primary" type="submit" style="margin-top:0.5rem;">Authorise {{ bank_name }} &rarr;</button>
+      </form>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

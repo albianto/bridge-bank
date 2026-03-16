@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Status — Bridge Bank{% endblock %}
+{% block content %}
+
+{% if licence_sync_failed %}
+  {% if licence_limit_reached %}
+    <div class="alert alert-error">Your licence is inactive and syncing has stopped. <a href="https://app.lemonsqueezy.com/my-orders" target="_blank">Manage your licence &rarr;</a></div>
+  {% else %}
+    <div class="alert alert-warn">Your licence is not activated on this machine. <a href="/setup">Re-enter your licence key &rarr;</a></div>
+  {% endif %}
+{% endif %}
+
+{% if days_left is not none and days_left <= 14 %}
+  <div class="alert alert-warn">Your bank connection expires in {{ days_left }} day{{ 's' if days_left != 1 else '' }}. <a href="/connect">Reconnect &rarr;</a></div>
+{% endif %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
+    <div>
+      <div class="card-title" style="margin-bottom:0.25rem;">Status</div>
+      <div class="card-sub" style="margin-bottom:0;">Your sync is running</div>
+    </div>
+    <button class="btn btn-ghost" id="sync-btn" onclick="runSync()">Sync now</button>
+  </div>
+  <div class="stat-row"><span class="stat-label">Bank</span><span class="stat-value">{{ bank_name }} <span class="connected-pill">Connected</span></span></div>
+  <div class="stat-row"><span class="stat-label">Actual Budget</span><span class="stat-value">{{ actual_account }}</span></div>
+  <div class="stat-row"><span class="stat-label">Last sync</span><span class="stat-value">{{ last_sync or 'Never' }}</span></div>
+  <div class="stat-row"><span class="stat-label">Sync interval</span><span class="stat-value">Every {{ sync_interval_hours }}h</span></div>
+  <div class="stat-row"><span class="stat-label">Notifications</span><span class="stat-value">{{ notify_email or 'Disabled' }}</span></div>
+  {% if days_left is not none %}
+  <div class="stat-row"><span class="stat-label">Session expiry</span><span class="stat-value" style="color:{% if days_left <= 14 %}#fcd34d{% else %}#6ee7b7{% endif %};">{{ days_left }} day{{ 's' if days_left != 1 else '' }} remaining</span></div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-title" style="font-size:15px; margin-bottom:1rem;">Sync log</div>
+  {% if syncs %}
+    <table class="log-table">
+      <thead><tr><th>Time</th><th>Status</th><th>Transactions</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for s in syncs %}
+        <tr>
+          <td>{{ s.ran_at }}</td>
+          <td><span class="badge {% if s.status == 'success' %}badge-success{% else %}badge-fail{% endif %}">{{ s.status }}</span></td>
+          <td>{{ s.tx_count }}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ s.message }}">{{ s.message or '&mdash;' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div style="color:#4a5568;font-size:13px;text-align:center;padding:2rem 0;line-height:1.6;">No syncs yet.<br>Click "Sync now" above or wait for the next scheduled run.</div>
+  {% endif %}
+</div>
+
+<div class="actions-row">
+  {% if activation_usage > 0 %}
+  <form method="POST" action="/settings/deactivate" onsubmit="return confirm('This will deactivate your licence on this machine. You can re-enter your key to reactivate. Continue?');">
+    <button type="submit" class="btn btn-danger">Deactivate licence ({{ activation_usage }}/{{ activation_limit }} activations used)</button>
+  </form>
+  {% else %}
+  <a href="/setup" class="btn btn-ghost" style="font-size:12px;">Enter licence key</a>
+  {% endif %}
+  <a href="/connect" class="btn btn-ghost">Manage connection</a>
+</div>
+
+<script>
+async function runSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.textContent = 'Running...';
+  btn.disabled = true;
+  try {
+    await fetch('/sync/now', { method: 'POST' });
+    btn.textContent = 'Started';
+    setTimeout(() => location.reload(), 8000);
+  } catch(e) {
+    btn.textContent = 'Error — try again';
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}
