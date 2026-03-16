@@ -1,6 +1,6 @@
 import os, json, time, logging, datetime, decimal, requests
 
-from . import config, db, email_notify, license
+from . import config, db, email_notify, licence
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
