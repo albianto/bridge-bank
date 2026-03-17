@@ -125,6 +125,9 @@ def setup_notifications():
             config.set("SMTP_PASSWORD", smtp_password)
             config.set("ACCOUNT_HOLDER_NAME", holder_name)
             config.set("SYNC_TIME", sync_time)
+            scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+            host   = request.headers.get("X-Forwarded-Host", request.host)
+            config.set("BRIDGE_BANK_URL", f"{scheme}://{host}")
             _start_scheduler_if_ready()
             return redirect(url_for("connect"))
     return render_template("setup_notifications.html",
@@ -136,6 +139,16 @@ def setup_notifications():
         sync_time=config.SYNC_TIME or "06:00",
         active="notifications",
     )
+
+# ---------------------------------------------------------------------------
+# Detect URL helper
+# ---------------------------------------------------------------------------
+
+@app.route("/api/detect-url")
+def detect_url():
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return jsonify({"url": f"{scheme}://{host}"})
 
 # ---------------------------------------------------------------------------
 # Connect (bank OAuth)
