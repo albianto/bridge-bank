@@ -252,7 +252,10 @@ def callback():
         ok = enablebanking.complete_auth(code=code, state=state)
         if ok:
             _start_scheduler_if_ready()
-            return '<html><body><script>window.close();</script><p>Bank connected. You can close this tab.</p></body></html>'
+            import threading
+            from .. import sync
+            threading.Thread(target=sync.run, daemon=True).start()
+            return redirect(url_for("status"))
         else:
             return redirect(url_for("connect") + "?error=auth_failed")
     except Exception as e:

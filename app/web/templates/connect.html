@@ -45,19 +45,11 @@
         <div style="font-size:13px;color:#94a3b8;margin-bottom:1.5rem;line-height:1.6;">Click the button below to open your bank login page.<br>After approving, you will be returned here automatically.</div>
       </div>
     </div>
-    <a href="{{ auth_url }}" target="_blank" class="btn btn-primary" onclick="startSpinner()">Open bank login &rarr;</a>
+    <a href="{{ auth_url }}" class="btn btn-primary">Open bank login &rarr;</a>
     <form method="POST" style="margin-top:0.75rem;">
       <input type="hidden" name="action" value="cancel">
       <button type="submit" class="btn btn-ghost" style="width:100%;">Cancel</button>
     </form>
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-    <script>
-    var pollTimer = setInterval(function() {
-      fetch('/api/bank-status').then(function(r) { return r.json(); }).then(function(d) {
-        if (d.connected) { clearInterval(pollTimer); window.location.href = '/connect?success=1'; }
-      }).catch(function() {});
-    }, 3000);
-    </script>
   </div>
 
 {% else %}
