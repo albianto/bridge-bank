@@ -10,6 +10,7 @@ Bridge Bank connects to your EU bank via open banking and imports your transacti
 
 - **Daily automatic sync** — transactions land in Actual Budget once a day, at a time you choose
 - **2,500+ European banks** — Revolut, N26, Monzo, Wise, Millennium BCP, Santander, ING, BNP Paribas, and more across 29 countries
+- **Multiple bank accounts** — connect up to 2 bank accounts by default, each syncing to a different Actual Budget account. Need more? Purchase additional slots from the status page.
 - **Read-only, always** — Bridge Bank can never move money or modify your account
 - **Pending transaction tracking** — pending transactions are imported as uncleared and automatically confirmed when they settle
 - **Duplicate detection** — Bridge Bank tracks every transaction ID so nothing gets imported twice
@@ -74,12 +75,15 @@ Open **http://your-server-address:3002** in your browser. The setup wizard will 
 
 ## Setup wizard
 
-The browser-based wizard walks you through four steps:
+The browser-based wizard walks you through five steps:
 
 1. **License** — enter your key to activate Bridge Bank on this machine
-2. **Actual Budget** — enter your Actual Budget URL, password, Sync ID, account name, and the date to start syncing from
+2. **Actual Budget** — enter your Actual Budget URL, password, Sync ID, and the date to start syncing from
 3. **Notifications** — set your email, SMTP credentials, and daily sync time
-4. **Bank** — upload your Enable Banking `.pem` file (App ID is filled automatically from the filename), then connect your bank via OAuth
+4. **Bank** — upload your Enable Banking `.pem` file (App ID is filled automatically from the filename), then connect your bank via OAuth. You choose which Actual Budget account each bank syncs to.
+5. **Status** — view sync history, manage bank connections, check for updates
+
+You can connect up to 2 bank accounts by default. Each bank syncs to a different Actual Budget account (e.g. Revolut → "Revolut", N26 → "N26"). To add a second bank, go to the **Bank** tab and search for another bank.
 
 Once complete, Bridge Bank runs silently in the background and syncs your transactions every day at the time you chose.
 
@@ -124,6 +128,10 @@ To re-authorise, go to the **Bank** tab in the Bridge Bank web UI and click **Re
 ---
 
 ## Updating
+
+Click **Check for updates** on the Status page. Bridge Bank will pull the latest version and restart automatically.
+
+Or run manually:
 ```bash
 docker compose pull && docker compose up -d
 ```
