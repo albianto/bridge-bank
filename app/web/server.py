@@ -181,7 +181,21 @@ def connect():
     if request.method == "POST":
         action = request.form.get("action")
 
-        if action == "start":
+        if action == "upload_pem":
+            pem_file = request.files.get("pem_file")
+            app_id   = request.form.get("eb_app_id", "").strip()
+            if not pem_file or not pem_file.filename:
+                error = "Please select a .pem file."
+            elif not app_id:
+                error = "Application ID is required."
+            else:
+                pem_content = pem_file.read().decode("utf-8", errors="ignore").strip()
+                db.set_setting("eb_pem_content", pem_content)
+                db.set_setting("eb_app_id", app_id)
+                config.set("EB_APPLICATION_ID", app_id)
+                return redirect(url_for("connect"))
+
+        elif action == "start":
             bank_name    = request.form.get("bank_name", "").strip()
             bank_country = request.form.get("bank_country", "").strip()
             if not bank_name or not bank_country:
@@ -203,12 +217,15 @@ def connect():
     tokens     = _get_tokens()
     days_left  = _get_days_left()
     success    = request.args.get("success")
+    pem_ready  = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
     return render_template("connect.html",
         error=error,
         success=success,
         auth_url=auth_url,
         tokens=tokens,
         days_left=days_left,
+        pem_ready=pem_ready,
+        eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         active="connect",
     )
 
@@ -305,6 +322,12 @@ def sync_now():
 # ---------------------------------------------------------------------------
 # Disconnect
 # ---------------------------------------------------------------------------
+
+@app.route("/connect/reset-pem")
+def reset_pem():
+    db.set_setting("eb_pem_content", "")
+    db.set_setting("eb_app_id", "")
+    return redirect(url_for("connect"))
 
 @app.route("/disconnect", methods=["POST"])
 def disconnect():

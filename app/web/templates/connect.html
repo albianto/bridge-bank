@@ -54,9 +54,30 @@
   </div>
 
 {% else %}
+  {% if not pem_ready %}
+  <div class="card">
+    <div class="card-title">Upload your private key</div>
+    <div class="card-sub">Step 4 of 4 — upload your Enable Banking private key file before connecting your bank.</div>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="upload_pem">
+      <label style="margin-top:0;">Private key file (.pem)</label>
+      <input type="file" name="pem_file" accept=".pem" required>
+      <div class="field-hint">Your <code style="font-size:11px;color:#94a3b8;">private.pem</code> file from the Enable Banking dashboard. It stays on your server and is never shared.</div>
+      <label>Application ID</label>
+      <input type="text" name="eb_app_id" value="{{ eb_app_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required>
+      <div class="field-hint">From your <a href="https://enablebanking.com/" target="_blank">Enable Banking dashboard</a> under Applications.</div>
+      <button class="btn btn-primary" type="submit">Save &amp; continue &rarr;</button>
+    </form>
+  </div>
+  {% else %}
   <div class="card">
     <div class="card-title">Connect your bank</div>
     <div class="card-sub">Step 4 of 4 — search for your bank and authorise read-only access.</div>
+    {% if pem_ready %}
+    <div style="margin-bottom:1rem;padding:10px 14px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px;">
+      <span>&#10003;</span> Private key loaded. <a href="/connect/reset-pem" style="color:#94a3b8;font-size:12px;margin-left:auto;">Replace</a>
+    </div>
+    {% endif %}
     <form method="POST" id="connect-form">
       <input type="hidden" name="action" value="start">
       <input type="hidden" id="inp-bank-name" name="bank_name">
@@ -153,5 +174,6 @@
     }
   </script>
 {% endif %}
+  {% endif %}
 
 {% endblock %}
