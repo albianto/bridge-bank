@@ -66,9 +66,9 @@ def is_configured() -> bool:
                 ACTUAL_SYNC_ID and ACTUAL_ACCOUNT)
 
 def is_connected() -> bool:
-    """Returns True if a bank session exists."""
+    """Returns True if at least one bank account is connected."""
     from . import db
-    return db.get_setting("eb_session_id") != ""
+    return db.get_bank_account_count() > 0
 
 # Load on import
 _load()

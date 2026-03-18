@@ -26,7 +26,46 @@ def _ensure_tables(conn):
             message TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            account_uid TEXT NOT NULL,
+            bank_name TEXT NOT NULL,
+            bank_country TEXT NOT NULL,
+            actual_account TEXT NOT NULL,
+            session_expiry TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
+
+    # Migrate legacy flat settings into bank_accounts table
+    row = conn.execute("SELECT value FROM settings WHERE key = 'eb_session_id'").fetchone()
+    if row and row["value"]:
+        count = conn.execute("SELECT COUNT(*) FROM bank_accounts").fetchone()[0]
+        if count == 0:
+            sid = row["value"]
+            uid_row = conn.execute("SELECT value FROM settings WHERE key = 'eb_account_uid'").fetchone()
+            exp_row = conn.execute("SELECT value FROM settings WHERE key = 'eb_session_expiry'").fetchone()
+            uid = uid_row["value"] if uid_row else ""
+            exp = exp_row["value"] if exp_row else ""
+            # Import config for legacy bank name / actual account
+            try:
+                from . import config
+                bank_name = config.EB_BANK_NAME or "Unknown"
+                bank_country = config.EB_BANK_COUNTRY or ""
+                actual_account = config.ACTUAL_ACCOUNT or "Revolut"
+            except Exception:
+                bank_name = "Unknown"
+                bank_country = ""
+                actual_account = "Revolut"
+            if uid:
+                conn.execute(
+                    "INSERT INTO bank_accounts (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry) VALUES (?, ?, ?, ?, ?, ?)",
+                    (sid, uid, bank_name, bank_country, actual_account, exp)
+                )
+                conn.commit()
 
 def get_setting(key: str) -> str:
     with _conn() as conn:
@@ -91,3 +130,31 @@ def get_last_sync() -> str:
             "SELECT ran_at FROM sync_log WHERE status = 'success' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         return row["ran_at"] if row else ""
+
+def get_all_bank_accounts() -> list:
+    with _conn() as conn:
+        _ensure_tables(conn)
+        rows = conn.execute(
+            "SELECT * FROM bank_accounts ORDER BY created_at ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def get_bank_account_count() -> int:
+    with _conn() as conn:
+        _ensure_tables(conn)
+        return conn.execute("SELECT COUNT(*) FROM bank_accounts").fetchone()[0]
+
+def add_bank_account(session_id: str, account_uid: str, bank_name: str, bank_country: str, actual_account: str, session_expiry: str = ""):
+    with _conn() as conn:
+        _ensure_tables(conn)
+        conn.execute(
+            "INSERT INTO bank_accounts (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry) VALUES (?, ?, ?, ?, ?, ?)",
+            (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry)
+        )
+        conn.commit()
+
+def remove_bank_account(account_id: int):
+    with _conn() as conn:
+        _ensure_tables(conn)
+        conn.execute("DELETE FROM bank_accounts WHERE id = ?", (account_id,))
+        conn.commit()

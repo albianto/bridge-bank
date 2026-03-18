@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = "bridge-bank-secret"
 
+CONTAINER_NAME = "bridge-bank"
+IMAGE_NAME = "daalves/bridge-bank:latest"
+
 COUNTRIES = [
     ("AT","Austria"),("BE","Belgium"),("HR","Croatia"),("CY","Cyprus"),
     ("CZ","Czech Republic"),("DK","Denmark"),("EE","Estonia"),("FI","Finland"),
@@ -115,6 +118,7 @@ def setup_actual():
         actual_sync_id=config.ACTUAL_SYNC_ID,
         actual_account=config.ACTUAL_ACCOUNT,
         start_sync_date=config.START_SYNC_DATE or __import__('datetime').date.today().isoformat(),
+        is_configured=config.is_configured(),
         active="actual",
     )
 
@@ -163,18 +167,22 @@ def health():
     return jsonify({"status": "ok"})
 
 # ---------------------------------------------------------------------------
-# Detect URL helper
+# API endpoints
 # ---------------------------------------------------------------------------
 
 @app.route("/api/bank-status")
 def bank_status():
-    return jsonify({"connected": _get_tokens() is not None})
+    return jsonify({"connected": db.get_bank_account_count() > 0})
 
 @app.route("/api/detect-url")
 def detect_url():
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
     host   = request.headers.get("X-Forwarded-Host", request.host)
     return jsonify({"url": f"{scheme}://{host}"})
+
+@app.route("/api/last-sync")
+def last_sync_api():
+    return jsonify({"ran_at": db.get_last_sync() or ""})
 
 # ---------------------------------------------------------------------------
 # Connect (bank OAuth)
@@ -203,13 +211,19 @@ def connect():
                 return redirect(url_for("connect"))
 
         elif action == "start":
-            bank_name    = request.form.get("bank_name", "").strip()
-            bank_country = request.form.get("bank_country", "").strip()
+            bank_name      = request.form.get("bank_name", "").strip()
+            bank_country   = request.form.get("bank_country", "").strip()
+            actual_account = request.form.get("actual_account", "").strip()
             if not bank_name or not bank_country:
                 error = "Please select a bank."
+            elif not actual_account:
+                error = "Please enter the Actual Budget account name."
             else:
                 config.set("EB_BANK_NAME", bank_name)
                 config.set("EB_BANK_COUNTRY", bank_country)
+                db.set_setting("pending_actual_account", actual_account)
+                db.set_setting("pending_bank_name", bank_name)
+                db.set_setting("pending_bank_country", bank_country)
                 try:
                     from .. import enablebanking
                     result   = enablebanking.start_auth(bank_name, bank_country)
@@ -219,20 +233,82 @@ def connect():
 
         elif action == "cancel":
             db.set_setting("pending_session_id", "")
+            db.set_setting("pending_actual_account", "")
+            db.set_setting("pending_bank_name", "")
+            db.set_setting("pending_bank_country", "")
             return redirect(url_for("connect"))
 
-    tokens     = _get_tokens()
-    days_left  = _get_days_left()
-    success    = request.args.get("success")
-    pem_ready  = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
+    all_accounts = db.get_all_bank_accounts()
+    days_left    = _get_days_left()
+    success      = request.args.get("success")
+    pem_ready    = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
+
+    # Fetch bank account limit from licence API
+    bank_account_limit = 2
+    try:
+        import requests as _requests
+        key = config.LICENCE_KEY
+        if key:
+            resp = _requests.post("https://api.klartion.com/info", json={"license_key": key}, timeout=5)
+            if resp.status_code == 200:
+                bank_account_limit = resp.json().get("bank_account_limit", 2)
+    except Exception:
+        pass
+
     return render_template("connect.html",
         error=error,
         success=success,
         auth_url=auth_url,
-        tokens=tokens,
+        all_accounts=all_accounts,
         days_left=days_left,
         pem_ready=pem_ready,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
+        bank_account_limit=bank_account_limit,
+        bank_slot_url=f"https://buy.stripe.com/4gM9AMg348nt2Y7185cMM04?client_reference_id={config.LICENCE_KEY}",
+        active="connect",
+    )
+
+# ---------------------------------------------------------------------------
+# Re-authorise existing bank
+# ---------------------------------------------------------------------------
+
+@app.route("/connect/reauthorise", methods=["POST"])
+def reauthorise():
+    bank_name    = request.form.get("bank_name", "").strip()
+    bank_country = request.form.get("bank_country", "").strip()
+    if not bank_name or not bank_country:
+        return redirect(url_for("connect"))
+    try:
+        from .. import enablebanking
+        db.set_setting("pending_bank_name", bank_name)
+        db.set_setting("pending_bank_country", bank_country)
+        result   = enablebanking.start_auth(bank_name, bank_country)
+        auth_url = result["url"]
+    except Exception as e:
+        logger.error("Failed to start reauth: %s", e)
+        return redirect(url_for("connect") + f"?error=Could not start re-authorisation: {e}")
+
+    all_accounts = db.get_all_bank_accounts()
+    bank_account_limit = 2
+    try:
+        import requests as _requests
+        key = config.LICENCE_KEY
+        if key:
+            resp = _requests.post("https://api.klartion.com/info", json={"license_key": key}, timeout=5)
+            if resp.status_code == 200:
+                bank_account_limit = resp.json().get("bank_account_limit", 2)
+    except Exception:
+        pass
+
+    return render_template("connect.html",
+        error=None,
+        success=None,
+        auth_url=auth_url,
+        all_accounts=all_accounts,
+        pem_ready=True,
+        eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
+        bank_account_limit=bank_account_limit,
+        bank_slot_url=f"https://buy.stripe.com/4gM9AMg348nt2Y7185cMM04?client_reference_id={config.LICENCE_KEY}",
         active="connect",
     )
 
@@ -249,11 +325,31 @@ def callback():
         return redirect(url_for("connect") + "?error=auth_failed")
     try:
         from .. import enablebanking
-        ok = enablebanking.complete_auth(code=code, state=state)
-        if ok:
+        result = enablebanking.complete_auth(code=code, state=state)
+        if result:
+            # Retrieve pending info
+            actual_account = db.get_setting("pending_actual_account") or config.ACTUAL_ACCOUNT
+            bank_name      = db.get_setting("pending_bank_name") or config.EB_BANK_NAME
+            bank_country   = db.get_setting("pending_bank_country") or config.EB_BANK_COUNTRY
+
+            # Save to bank_accounts table
+            db.add_bank_account(
+                session_id=result["session_id"],
+                account_uid=result["account_uid"],
+                bank_name=bank_name,
+                bank_country=bank_country,
+                actual_account=actual_account,
+                session_expiry=result.get("valid_until", ""),
+            )
+
+            # Clear pending settings
+            db.set_setting("pending_actual_account", "")
+            db.set_setting("pending_bank_name", "")
+            db.set_setting("pending_bank_country", "")
+            db.set_setting("pending_session_state", "")
+            db.set_setting("pending_session_valid_until", "")
+
             _start_scheduler_if_ready()
-            import threading
-            from .. import sync
             threading.Thread(target=sync.run, daemon=True).start()
             return redirect(url_for("status"))
         else:
@@ -273,12 +369,13 @@ def status():
     if not config.is_connected():
         return redirect(url_for("connect"))
 
-    page      = request.args.get("page", 1, type=int)
-    log_data  = db.get_sync_log_page(page=page, per_page=5)
-    syncs     = log_data["syncs"]
-    days_left = _get_days_left()
-    last_sync = db.get_last_sync()
-    act_info  = licence.get_activation_info()
+    page         = request.args.get("page", 1, type=int)
+    log_data     = db.get_sync_log_page(page=page, per_page=5)
+    syncs        = log_data["syncs"]
+    all_accounts = db.get_all_bank_accounts()
+    days_left    = _get_days_left()
+    last_sync    = db.get_last_sync()
+    act_info     = licence.get_activation_info()
 
     license_sync_failed = False
     val = licence.validate()
@@ -287,11 +384,9 @@ def status():
 
     return render_template("status.html",
         syncs=syncs,
+        all_accounts=all_accounts,
         days_left=days_left,
         last_sync=last_sync,
-        bank_name=config.EB_BANK_NAME,
-        bank_country=config.EB_BANK_COUNTRY,
-        actual_account=config.ACTUAL_ACCOUNT,
         sync_time=config.SYNC_TIME,
         notify_email=config.NOTIFY_EMAIL,
         activation_usage=act_info["usage"],
@@ -301,6 +396,7 @@ def status():
         page=log_data["page"],
         total_pages=log_data["total_pages"],
         active="status",
+        update_mode=db.get_setting("update_mode"),
     )
 
 # ---------------------------------------------------------------------------
@@ -329,6 +425,20 @@ def sync_now():
     threading.Thread(target=sync.run, daemon=True).start()
     return jsonify({"ok": True})
 
+@app.route("/sync/reset", methods=["POST"])
+def sync_reset():
+    import json, os
+    state_file = "/data/state.json"
+    if os.path.exists(state_file):
+        with open(state_file) as f:
+            state = json.load(f)
+        state.pop("last_sync_date", None)
+        for key in list(state.get("accounts", {}).keys()):
+            state["accounts"][key].pop("last_sync_date", None)
+        with open(state_file, "w") as f:
+            json.dump(state, f, indent=2)
+    return redirect(url_for("status"))
+
 # ---------------------------------------------------------------------------
 # Disconnect
 # ---------------------------------------------------------------------------
@@ -341,22 +451,40 @@ def reset_pem():
 
 @app.route("/disconnect", methods=["POST"])
 def disconnect():
-    db.set_setting("eb_session_id", "")
-    db.set_setting("eb_account_uid", "")
-    db.set_setting("eb_session_expiry", "")
+    account_id = request.form.get("account_id")
+    if account_id:
+        db.remove_bank_account(int(account_id))
     return redirect(url_for("connect"))
-
-# ---------------------------------------------------------------------------
-# Health check
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Detect URL helper
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Banks
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Update preference + self-update
+# ---------------------------------------------------------------------------
+
+@app.route("/update/preference", methods=["POST"])
+def update_preference():
+    mode = request.form.get("mode", "manual")
+    db.set_setting("update_mode", mode)
+    return redirect(url_for("status"))
+
+@app.route("/update/run", methods=["POST"])
+def update_run():
+    import subprocess, os
+    if not os.path.exists("/var/run/docker.sock"):
+        return jsonify({"error": "Docker socket not mounted. Add '- /var/run/docker.sock:/var/run/docker.sock' and '- .:/compose:ro' to your docker-compose.yml volumes."}), 400
+    try:
+        subprocess.Popen(
+            ["sh", "-c", f"sleep 2 && docker pull {IMAGE_NAME} && cd /compose && docker compose up -d"],
+            start_new_session=True
+        )
+        return jsonify({"ok": True})
+    except FileNotFoundError:
+        return jsonify({"error": "Docker CLI not available in container."}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 _banks_cache = None
 
@@ -380,28 +508,9 @@ def banks():
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_tokens():
-    session_id = db.get_setting("eb_session_id")
-    if not session_id:
-        return None
-    return {
-        "bank_name":    config.EB_BANK_NAME,
-        "bank_country": config.EB_BANK_COUNTRY,
-        "session_id":   session_id,
-    }
-
 def _get_days_left():
-    exp = db.get_setting("eb_session_expiry")
-    if not exp:
-        return None
-    try:
-        from datetime import datetime, timezone
-        expiry = datetime.fromisoformat(exp)
-        if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
-        return (expiry - datetime.now(timezone.utc)).days
-    except Exception:
-        return None
+    from .. import enablebanking
+    return enablebanking.check_token_expiry()
 
 def _start_scheduler_if_ready():
     if config.is_configured():

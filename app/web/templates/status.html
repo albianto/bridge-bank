@@ -1,5 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Status — Bridge Bank{% endblock %}
+{% block steps %}
+<div class="steps">
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+  <div class="step done"></div>
+</div>
+{% endblock %}
 {% block content %}
 
 {% if license_sync_failed %}
@@ -11,7 +20,7 @@
 {% endif %}
 
 {% if days_left is not none and days_left <= 14 %}
-  <div class="alert alert-warn">Your bank connection expires in {{ days_left }} day{{ 's' if days_left != 1 else '' }}. <a href="/connect" style="color:inherit;font-weight:600;">Reconnect &rarr;</a></div>
+  <div class="alert alert-warn">A bank connection expires in {{ days_left }} day{{ 's' if days_left != 1 else '' }}. <a href="/connect" style="color:inherit;font-weight:600;">Manage banks &rarr;</a></div>
 {% endif %}
 
 <div class="card">
@@ -22,28 +31,36 @@
     </div>
     <button class="btn btn-ghost" id="sync-btn" onclick="runSync()">Sync now</button>
   </div>
-  <div class="stat-row">
-    <span class="stat-label">Bank</span>
-    <span class="stat-value" style="display:flex;align-items:center;gap:8px;">{{ bank_name }} <span class="connected-pill">Connected</span></span>
+  {% for a in all_accounts %}
+  <div style="{% if not loop.first %}margin-top:1rem; padding-top:1rem; border-top:1px solid #253450;{% endif %}">
+    <div class="stat-row">
+      <span class="stat-label">Bank</span>
+      <span class="stat-value" style="display:flex;align-items:center;gap:8px;">
+        {{ a.bank_name }} ({{ a.bank_country }}) &rarr; {{ a.actual_account }}
+        <span class="connected-pill">Connected</span>
+      </span>
+    </div>
+    {% if a.session_expiry %}
+    <div class="stat-row">
+      <span class="stat-label">Session</span>
+      <span class="stat-value" style="display:flex;align-items:center;gap:10px;">
+        {{ a.session_expiry[:10] }}
+        <form method="POST" action="/connect/reauthorise" style="display:inline;">
+          <input type="hidden" name="bank_name" value="{{ a.bank_name }}">
+          <input type="hidden" name="bank_country" value="{{ a.bank_country }}">
+          <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;">Re-authorise</button>
+        </form>
+      </span>
+    </div>
+    {% endif %}
   </div>
-  <div class="stat-row"><span class="stat-label">Actual Budget</span><span class="stat-value">{{ actual_account }}</span></div>
-  <div class="stat-row"><span class="stat-label">Last sync</span><span class="stat-value">{{ last_sync or 'Never' }}</span></div>
+  {% endfor %}
+  <div class="stat-row" style="margin-top:1rem; padding-top:1rem; border-top:1px solid #253450;">
+    <span class="stat-label">Last sync</span>
+    <span class="stat-value">{{ last_sync or 'Never' }}</span>
+  </div>
   <div class="stat-row"><span class="stat-label">Next sync</span><span class="stat-value">{{ sync_time }} daily</span></div>
   <div class="stat-row"><span class="stat-label">Notifications</span><span class="stat-value">{{ notify_email or 'Disabled' }}</span></div>
-  {% if days_left is not none %}
-  <div class="stat-row">
-    <span class="stat-label">Session expiry</span>
-    <span class="stat-value" style="color:{% if days_left <= 14 %}#fcd34d{% else %}#6ee7b7{% endif %};">{{ days_left }} day{{ 's' if days_left != 1 else '' }} remaining</span>
-  </div>
-  <div style="margin-top:0.75rem;display:flex;justify-content:flex-end;">
-    <form method="POST" action="/connect" style="display:inline;">
-      <input type="hidden" name="action" value="start">
-      <input type="hidden" name="bank_name" value="{{ bank_name }}">
-      <input type="hidden" name="bank_country" value="{{ bank_country }}">
-      <button type="submit" class="btn btn-ghost" style="font-size:12px;">Re-authorise bank &rarr;</button>
-    </form>
-  </div>
-  {% endif %}
 </div>
 
 <div class="card">
@@ -86,6 +103,38 @@
   {% endif %}
 </div>
 
+{% if not update_mode %}
+<div class="card">
+  <div class="card-title" style="font-size:15px; margin-bottom:0.25rem;">Updates</div>
+  <div style="font-size:13px; color:#94a3b8; margin-bottom:1rem;">How would you like to update Bridge Bank?</div>
+  <form method="POST" action="/update/preference" style="margin-bottom:0.75rem;">
+    <input type="hidden" name="mode" value="auto">
+    <button type="submit" class="btn btn-primary" style="width:100%; font-size:13px; margin-top:0;">Auto-update</button>
+    <div style="font-size:11px; color:#4a5568; margin-top:0.35rem;">Requires adding Docker socket to your compose file. One-time setup.</div>
+  </form>
+  <form method="POST" action="/update/preference">
+    <input type="hidden" name="mode" value="manual">
+    <button type="submit" class="btn btn-ghost" style="width:100%; font-size:13px; margin-top:0;">Manual</button>
+    <div style="font-size:11px; color:#4a5568; margin-top:0.35rem;">Copy and paste a command in your terminal.</div>
+  </form>
+</div>
+{% elif update_mode == 'auto' %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="card-title" style="font-size:15px; margin-bottom:0;">Updates</div>
+    <button class="btn btn-ghost" id="update-btn" onclick="runUpdate()" style="font-size:12px;">Check for updates</button>
+  </div>
+  <div id="update-status" style="font-size:12px; color:#94a3b8; margin-top:0.5rem; display:none;"></div>
+</div>
+{% elif update_mode == 'manual' %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="card-title" style="font-size:15px; margin-bottom:0;">Updates</div>
+    <button class="btn btn-ghost" onclick="copyUpdate(this)" style="font-size:12px;">Copy update command</button>
+  </div>
+</div>
+{% endif %}
+
 <div style="display:flex; justify-content:space-between; align-items:center;">
   {% if activation_usage > 0 %}
   <form method="POST" action="/settings/deactivate" onsubmit="return confirm('This will deactivate your license on this machine. You can re-enter your key to reactivate. Continue?');">
@@ -94,17 +143,63 @@
   {% else %}
   <a href="/setup" class="btn btn-ghost" style="font-size:12px;">Enter your license key</a>
   {% endif %}
-  <a href="/connect" style="background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;text-decoration:none;">← Bank</a>
+  <a href="/connect" style="background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;text-decoration:none;">&larr; Bank</a>
 </div>
 
 <script>
+async function runUpdate() {
+  const btn = document.getElementById('update-btn');
+  const status = document.getElementById('update-status');
+  btn.textContent = 'Checking...';
+  btn.disabled = true;
+  status.style.display = 'block';
+  status.textContent = 'Pulling latest image...';
+  try {
+    const resp = await fetch('/update/run', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      status.textContent = 'Updating... the page will refresh automatically.';
+      setTimeout(function pollServer() {
+        fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
+      }, 5000);
+    } else if (data.error) {
+      status.innerHTML = 'Auto-update unavailable. Add these lines to your docker-compose.yml volumes:<br><code style="font-size:11px;">- /var/run/docker.sock:/var/run/docker.sock</code><br><code style="font-size:11px;">- .:/compose:ro</code>';
+      btn.textContent = 'Check for updates';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    status.textContent = 'Update may be in progress. Refreshing...';
+    setTimeout(function pollServer() {
+      fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
+    }, 3000);
+  }
+}
+
+function copyUpdate(btn) {
+  navigator.clipboard.writeText('cd ~/bridge-bank && docker compose pull && docker compose up -d').then(function() {
+    btn.textContent = 'Copied';
+    setTimeout(function() { btn.textContent = 'Copy update command'; }, 1500);
+  });
+}
+
 async function runSync() {
   const btn = document.getElementById('sync-btn');
   btn.textContent = 'Syncing...';
   btn.disabled = true;
   try {
     await fetch('/sync/now', { method: 'POST' });
-    setTimeout(() => location.reload(), 8000);
+    // Poll until sync completes (new log entry appears)
+    var attempts = 0;
+    var poll = setInterval(function() {
+      attempts++;
+      if (attempts > 60) { clearInterval(poll); location.reload(); return; }
+      fetch('/api/last-sync').then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ran_at && d.ran_at !== '{{ last_sync or "" }}') {
+          clearInterval(poll);
+          location.reload();
+        }
+      }).catch(function() {});
+    }, 2000);
   } catch(e) {
     btn.textContent = 'Error — try again';
     btn.disabled = false;

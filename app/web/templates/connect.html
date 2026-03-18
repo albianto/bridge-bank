@@ -5,7 +5,8 @@
   <div class="step done"></div>
   <div class="step done"></div>
   <div class="step done"></div>
-  <div class="step {% if tokens %}done{% else %}active{% endif %}"></div>
+  <div class="step {% if all_accounts %}done{% else %}active{% endif %}"></div>
+  <div class="step"></div>
 </div>
 {% endblock %}
 {% block content %}
@@ -17,46 +18,10 @@
   <div class="alert alert-success">Bank connected. Your first sync will run shortly.</div>
 {% endif %}
 
-{% if tokens %}
-  <div class="card">
-    <div class="card-title">Connect your bank</div>
-    <div class="card-sub">Step 4 of 4 — authorise read-only access via Enable Banking</div>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-      <div>
-        <div class="connected-pill">Connected</div>
-        <div style="margin-top:8px; font-size:12px; color:#94a3b8;">{{ tokens.bank_name }} ({{ tokens.bank_country }})</div>
-      </div>
-      <form method="POST" action="/disconnect" onsubmit="return confirm('Disconnect your bank? Syncing will stop until you reconnect.');">
-        <button type="submit" class="btn btn-danger">Disconnect</button>
-      </form>
-    </div>
-  </div>
-  <a href="/status" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Continue to status &rarr;</a>
-
-{% elif auth_url %}
-  <div class="card">
-    <div class="card-title">Connect your bank</div>
-    <div class="card-sub">Approve access in your browser, then come back here.</div>
-    <div style="text-align:center;padding:0.5rem 0 1rem;">
-      <div id="spinner" style="display:none;width:36px;height:36px;border:2px solid #1e2a40;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 1rem;"></div>
-      <div id="waiting-msg" style="display:none;font-size:14px;color:#94a3b8;margin-bottom:1rem;">Waiting for approval — complete the steps in your browser...</div>
-      <div id="pre-msg">
-        <div style="font-size:15px;font-weight:600;margin-bottom:0.5rem;">Authorise your bank</div>
-        <div style="font-size:13px;color:#94a3b8;margin-bottom:1.5rem;line-height:1.6;">Click the button below to open your bank login page.<br>After approving, you will be returned here automatically.</div>
-      </div>
-    </div>
-    <a href="{{ auth_url }}" class="btn btn-primary">Open bank login &rarr;</a>
-    <form method="POST" style="margin-top:0.75rem;">
-      <input type="hidden" name="action" value="cancel">
-      <button type="submit" class="btn btn-ghost" style="width:100%;">Cancel</button>
-    </form>
-  </div>
-
-{% else %}
-  {% if not pem_ready %}
+{% if not pem_ready and not auth_url %}
   <div class="card">
     <div class="card-title">Upload your private key</div>
-    <div class="card-sub">Step 4 of 4 — upload your Enable Banking private key file before connecting your bank.</div>
+    <div class="card-sub">Step 4 of 5 — upload your Enable Banking private key file before connecting your bank.</div>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="upload_pem">
       <label style="margin-top:0;">Private key file (.pem)</label>
@@ -78,20 +43,60 @@
       <button class="btn btn-primary" type="submit">Save &amp; continue &rarr;</button>
     </form>
   </div>
-  {% else %}
+
+{% elif pem_ready and not auth_url %}
   <div class="card">
     <div class="card-title">Connect your bank</div>
-    <div class="card-sub">Step 4 of 4 — search for your bank and authorise read-only access.</div>
-    {% if pem_ready %}
+    <div class="card-sub">Step 4 of 5 — search for your bank and authorise read-only access.</div>
+
     <div style="margin-bottom:1rem;padding:10px 14px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px;">
       <span>&#10003;</span> Private key loaded. <a href="/connect/reset-pem" style="color:#94a3b8;font-size:12px;margin-left:auto;">Replace</a>
     </div>
+
+    {% if all_accounts %}
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#94a3b8;margin-bottom:0.5rem;">Connected accounts ({{ all_accounts|length }}/{{ bank_account_limit }})</div>
+    {% for a in all_accounts %}
+    <div style="margin-bottom:0.75rem;padding:12px 14px;border:1px solid #253450;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="connected-pill">Connected</div>
+          <div style="margin-top:8px;font-size:12px;color:#94a3b8;">
+            {{ a.bank_name }} ({{ a.bank_country }}) &rarr; {{ a.actual_account }}
+          </div>
+        </div>
+        <form method="POST" action="/disconnect" onsubmit="return confirm('Disconnect this bank account? Syncing will stop for this account until you reconnect.');">
+          <input type="hidden" name="account_id" value="{{ a.id }}">
+          <button type="submit" class="btn btn-danger">Disconnect</button>
+        </form>
+      </div>
+      {% if a.session_expiry %}
+      <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#4a5568;">
+        <span>Expires {{ a.session_expiry[:10] }}</span>
+        <form method="POST" action="/connect/reauthorise" style="display:inline;">
+          <input type="hidden" name="bank_name" value="{{ a.bank_name }}">
+          <input type="hidden" name="bank_country" value="{{ a.bank_country }}">
+          <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:11px;text-decoration:underline;">Re-authorise</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <hr style="border:none;border-top:1px solid #253450;margin:1.25rem 0;">
     {% endif %}
+
+    {% if all_accounts|length >= bank_account_limit %}
+    <div style="padding:14px;background:#080b12;border:1px solid #253450;border-radius:8px;font-size:13px;color:#94a3b8;text-align:center;">
+      Bank account limit reached. <a href="{{ bank_slot_url }}" target="_blank" style="color:#e8edf5;font-weight:600;">Add more &rarr;</a>
+    </div>
+    {% else %}
     <form method="POST" id="connect-form">
       <input type="hidden" name="action" value="start">
       <input type="hidden" id="inp-bank-name" name="bank_name">
       <input type="hidden" id="inp-bank-country" name="bank_country">
-      <label style="margin-top:0;">Search your bank</label>
+      <label style="margin-top:0;">Actual Budget account</label>
+      <input type="text" name="actual_account" id="actual-account-input" placeholder="e.g. Revolut" required>
+      <div class="field-hint">The name of the account in Actual Budget where transactions will be synced.</div>
+      <label>Search your bank</label>
       <div style="position:relative;">
         <input type="text" id="bank-search" placeholder="Type to search 2,500+ European banks..." autocomplete="off" oninput="filterBanks(this.value)" onfocus="showDropdown()">
         <div id="bank-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#0f1420;border:1px solid #253450;border-top:none;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
@@ -103,86 +108,97 @@
       <div class="field-hint">Personal accounts only. 2,500+ banks across 29 European countries.</div>
       <button class="btn btn-primary" type="submit" id="connect-btn" disabled>Authorise bank &rarr;</button>
     </form>
+    {% endif %}
   </div>
 
-  <script>
-    let allBanks = [];
-
-    async function loadBanks() {
-      try {
-        const resp = await fetch('/banks');
-        allBanks = await resp.json();
-        const q = document.getElementById('bank-search');
-        if (q && q.value.trim()) filterBanks(q.value);
-      } catch(e) {
-        console.error('Failed to load banks', e);
-      }
-    }
-
-    function filterBanks(query) {
-      if (!allBanks.length) loadBanks();
-      const dd = document.getElementById('bank-dropdown');
-      if (!query.trim()) { dd.style.display = 'none'; return; }
-      const q = query.toLowerCase();
-      const matches = allBanks.filter(b =>
-        b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q)
-      ).slice(0, 40);
-      if (!matches.length) { dd.style.display = 'none'; return; }
-      dd.innerHTML = matches.map(b => `
-        <div onclick="selectBank('${b.name.replace(/'/g, "\'")}','${b.country}')" style="
-          padding:9px 12px; cursor:pointer; font-size:13px;
-          display:flex; justify-content:space-between; align-items:center;
-          border-bottom:1px solid #1e2a40;
-        " onmouseover="this.style.background='#161d2e'" onmouseout="this.style.background=''">
-          <span style="color:#e8edf5;">${b.name}</span>
-          <span style="font-size:11px;color:#4a5568;font-family:monospace;">${b.country}</span>
-        </div>
-      `).join('');
-      dd.style.display = 'block';
-    }
-
-    function showDropdown() {
-      const q = document.getElementById('bank-search').value;
-      if (q.trim()) filterBanks(q);
-    }
-
-    function selectBank(name, country) {
-      document.getElementById('inp-bank-name').value = name;
-      document.getElementById('inp-bank-country').value = country;
-      document.getElementById('bank-search').value = '';
-      document.getElementById('bank-dropdown').style.display = 'none';
-      const sel = document.getElementById('selected-bank');
-      document.getElementById('selected-label').textContent = name + ' (' + country + ')';
-      sel.style.display = 'flex';
-      document.getElementById('connect-btn').disabled = false;
-    }
-
-    function clearBank() {
-      document.getElementById('inp-bank-name').value = '';
-      document.getElementById('inp-bank-country').value = '';
-      document.getElementById('bank-search').value = '';
-      document.getElementById('selected-bank').style.display = 'none';
-      document.getElementById('connect-btn').disabled = true;
-    }
-
-    document.addEventListener('click', function(e) {
-      const dd = document.getElementById('bank-dropdown');
-      if (dd && !dd.contains(e.target) && e.target.id !== 'bank-search') {
-        dd.style.display = 'none';
-      }
-    });
-
-    loadBanks();
-
-    function startSpinner() {
-      setTimeout(() => {
-        document.getElementById('pre-msg').style.display = 'none';
-        document.getElementById('spinner').style.display = 'block';
-        document.getElementById('waiting-msg').style.display = 'block';
-      }, 500);
-    }
-  </script>
+{% elif auth_url %}
+  <div class="card">
+    <div class="card-title">Connect your bank</div>
+    <div class="card-sub">Approve access in your browser, then come back here.</div>
+    <div style="text-align:center;padding:0.5rem 0 1rem;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:0.5rem;">Authorise your bank</div>
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:1.5rem;line-height:1.6;">Click the button below to open your bank login page.<br>After approving, you will be returned here automatically.</div>
+    </div>
+    <a href="{{ auth_url }}" class="btn btn-primary">Open bank login &rarr;</a>
+    <form method="POST" style="margin-top:0.75rem;">
+      <input type="hidden" name="action" value="cancel">
+      <button type="submit" class="btn btn-ghost" style="width:100%;">Cancel</button>
+    </form>
+  </div>
 {% endif %}
-  {% endif %}
+
+{% if all_accounts and not auth_url %}
+  <a href="/status" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Continue to status &rarr;</a>
+{% endif %}
+
+<script>
+  let allBanks = [];
+
+  async function loadBanks() {
+    try {
+      const resp = await fetch('/banks');
+      allBanks = await resp.json();
+      const q = document.getElementById('bank-search');
+      if (q && q.value.trim()) filterBanks(q.value);
+    } catch(e) {
+      console.error('Failed to load banks', e);
+    }
+  }
+
+  function filterBanks(query) {
+    if (!allBanks.length) loadBanks();
+    const dd = document.getElementById('bank-dropdown');
+    if (!query.trim()) { dd.style.display = 'none'; return; }
+    const q = query.toLowerCase();
+    const matches = allBanks.filter(b =>
+      b.name.toLowerCase().includes(q) || b.country.toLowerCase().includes(q)
+    ).slice(0, 40);
+    if (!matches.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = matches.map(b => `
+      <div onclick="selectBank('${b.name.replace(/'/g, "\'")}','${b.country}')" style="
+        padding:9px 12px; cursor:pointer; font-size:13px;
+        display:flex; justify-content:space-between; align-items:center;
+        border-bottom:1px solid #1e2a40;
+      " onmouseover="this.style.background='#161d2e'" onmouseout="this.style.background=''">
+        <span style="color:#e8edf5;">${b.name}</span>
+        <span style="font-size:11px;color:#4a5568;font-family:monospace;">${b.country}</span>
+      </div>
+    `).join('');
+    dd.style.display = 'block';
+  }
+
+  function showDropdown() {
+    const q = document.getElementById('bank-search').value;
+    if (q.trim()) filterBanks(q);
+  }
+
+  function selectBank(name, country) {
+    document.getElementById('inp-bank-name').value = name;
+    document.getElementById('inp-bank-country').value = country;
+    document.getElementById('bank-search').value = '';
+    document.getElementById('bank-dropdown').style.display = 'none';
+    const sel = document.getElementById('selected-bank');
+    document.getElementById('selected-label').textContent = name + ' (' + country + ')';
+    sel.style.display = 'flex';
+    document.getElementById('connect-btn').disabled = false;
+  }
+
+  function clearBank() {
+    document.getElementById('inp-bank-name').value = '';
+    document.getElementById('inp-bank-country').value = '';
+    document.getElementById('bank-search').value = '';
+    document.getElementById('selected-bank').style.display = 'none';
+    document.getElementById('connect-btn').disabled = true;
+  }
+
+  document.addEventListener('click', function(e) {
+    const dd = document.getElementById('bank-dropdown');
+    if (dd && !dd.contains(e.target) && e.target.id !== 'bank-search') {
+      dd.style.display = 'none';
+    }
+  });
+
+  loadBanks();
+</script>
 
 {% endblock %}

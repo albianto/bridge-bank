@@ -60,7 +60,8 @@ def start_auth(bank_name: str, bank_country: str) -> dict:
     r.raise_for_status()
     return {"url": r.json()["url"]}
 
-def complete_auth(code: str, state: str) -> bool:
+def complete_auth(code: str, state: str) -> dict:
+    """Complete OAuth flow. Returns dict with session_id, account_uid, valid_until or None on failure."""
     # Strip embedded BRIDGE_BANK_URL from state before sending to Enable Banking
     clean_state = state.split("|")[-1] if "|" in state else state
     r = requests.post(f"{EB_API}/sessions", json={"code": code, "state": clean_state}, headers=_make_headers())
@@ -69,26 +70,36 @@ def complete_auth(code: str, state: str) -> bool:
     session_id = data["session_id"]
     accounts   = data.get("accounts", [])
     if not accounts:
-        return False
+        return None
     chosen      = accounts[0]
     account_uid = chosen.get("uid") or chosen.get("account_uid") or chosen.get("resource_id")
     valid_until = db.get_setting("pending_session_valid_until")
-    db.set_setting("eb_session_id",     session_id)
-    db.set_setting("eb_account_uid",    account_uid)
-    db.set_setting("eb_session_expiry", valid_until)
-    return True
+    return {
+        "session_id": session_id,
+        "account_uid": account_uid,
+        "valid_until": valid_until,
+    }
 
 def check_token_expiry():
-    exp = db.get_setting("eb_session_expiry")
-    if not exp:
+    """Return the minimum days left across all bank accounts, or None if no accounts."""
+    accounts = db.get_all_bank_accounts()
+    if not accounts:
         return None
-    try:
-        expiry = datetime.fromisoformat(exp)
-        if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
-        return (expiry - datetime.now(timezone.utc)).days
-    except Exception:
-        return None
+    min_days = None
+    for acct in accounts:
+        exp = acct.get("session_expiry")
+        if not exp:
+            continue
+        try:
+            expiry = datetime.fromisoformat(exp)
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+            days = (expiry - datetime.now(timezone.utc)).days
+            if min_days is None or days < min_days:
+                min_days = days
+        except Exception:
+            continue
+    return min_days
 
 def get_banks() -> list:
     r = requests.get(f"{EB_API}/aspsps", headers=_make_headers())

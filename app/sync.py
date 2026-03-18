@@ -47,19 +47,21 @@ def _save_state(state):
     with open(STATE_FILE, "w") as f:
         json.dump(state, f, indent=2)
 
-def _get_session(state):
-    sid = state.get("eb_session_id") or db.get_setting("eb_session_id")
-    uid = state.get("eb_account_uid") or db.get_setting("eb_account_uid")
-    exp = state.get("eb_session_expiry") or db.get_setting("eb_session_expiry")
+def _get_session(account):
+    """Takes a bank_accounts row dict, returns (session_id, account_uid). Warns on expiry."""
+    sid = account.get("session_id")
+    uid = account.get("account_uid")
+    exp = account.get("session_expiry")
     if not sid or not uid:
-        raise RuntimeError("No session found. Complete bank authorisation in the web UI.")
-    expiry = datetime.datetime.fromisoformat(exp)
-    if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=datetime.timezone.utc)
-    days_left = (expiry - datetime.datetime.now(datetime.timezone.utc)).days
-    if days_left < 7:
-        log.warning("Session expires in %d days.", days_left)
-        email_notify.send_session_expiry_warning(days_left)
+        raise RuntimeError("No session found for account %s." % account.get("bank_name", "unknown"))
+    if exp:
+        expiry = datetime.datetime.fromisoformat(exp)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=datetime.timezone.utc)
+        days_left = (expiry - datetime.datetime.now(datetime.timezone.utc)).days
+        if days_left < 7:
+            log.warning("Session for %s expires in %d days.", account.get("bank_name", "unknown"), days_left)
+            email_notify.send_session_expiry_warning(days_left)
     return sid, uid
 
 def _fetch_transactions(account_uid, date_from):
@@ -115,35 +117,32 @@ def _parse_notes(t):
 def _get_entry_ref(t):
     return t.get("entry_reference") or t.get("transaction_id") or ""
 
-def run():
-    log.info("Starting sync...")
+def _sync_account(account, state):
+    """Sync a single bank account. Returns (success, tx_count, message)."""
+    account_id = str(account["id"])
+    bank_label = f"{account.get('bank_name', 'Unknown')} ({account.get('bank_country', '')})"
+    actual_account_name = account.get("actual_account", config.ACTUAL_ACCOUNT)
 
-    # License check
-    result = licence.validate()
-    if not result["valid"]:
-        msg = f"License invalid: {result['error']}"
-        log.error(msg)
-        email_notify.send_failure(msg)
-        db.log_sync("failure", message=msg)
-        return False, 0, msg
-
-    state = _load_state()
     try:
-        _, account_uid = _get_session(state)
+        _, account_uid = _get_session(account)
     except RuntimeError as e:
         msg = str(e)
         log.error(msg)
-        db.log_sync("failure", message=msg)
         return False, 0, msg
 
-    last = state.get("last_sync_date") or config.START_SYNC_DATE or None
+    # Per-account state
+    if "accounts" not in state:
+        state["accounts"] = {}
+    acct_state = state["accounts"].get(account_id, {})
+
+    last = acct_state.get("last_sync_date") or config.START_SYNC_DATE or None
     if last:
         date_from = datetime.date.fromisoformat(last)
     else:
         date_from = datetime.date.today() - datetime.timedelta(days=30)
-        log.info("First run: fetching last 30 days")
+        log.info("First run for %s: fetching last 30 days", bank_label)
 
-    pending_map = state.get("pending_map", {})
+    pending_map = acct_state.get("pending_map", {})
     if pending_map:
         earliest = min(datetime.date.fromisoformat(k.split("|")[0]) for k in pending_map)
         if earliest < date_from:
@@ -152,19 +151,17 @@ def run():
     try:
         raw = _fetch_transactions(account_uid, date_from)
     except requests.HTTPError as e:
-        msg = "Enable Banking returned an error. Your session may have expired."
+        msg = f"{bank_label}: Enable Banking returned an error. Your session may have expired."
         log.error(msg)
-        db.log_sync("failure", message=msg)
         return False, 0, msg
 
     if not raw:
-        log.info("No new transactions")
-        state["last_sync_date"] = datetime.date.today().isoformat()
-        _save_state(state)
-        db.log_sync("success", tx_count=0)
+        log.info("No new transactions for %s", bank_label)
+        acct_state["last_sync_date"] = datetime.date.today().isoformat()
+        state["accounts"][account_id] = acct_state
         return True, 0, "OK"
 
-    imported_refs = set(state.get("imported_refs", []))
+    imported_refs = set(acct_state.get("imported_refs", []))
     added = updated = skipped = 0
 
     try:
@@ -173,8 +170,8 @@ def run():
 
         with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
                     file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
-            account        = get_or_create_account(actual.session, config.ACTUAL_ACCOUNT)
-            existing       = list(get_transactions(actual.session, account=account))
+            account_obj    = get_or_create_account(actual.session, actual_account_name)
+            existing       = list(get_transactions(actual.session, account=account_obj))
             already_matched = existing[:]
             new_txn        = []
 
@@ -192,13 +189,13 @@ def run():
                         if key not in pending_map:
                             try:
                                 t = reconcile_transaction(
-                                    actual.session, date, account, payee, notes,
+                                    actual.session, date, account_obj, payee, notes,
                                     None, amount, cleared=False,
                                     already_matched=already_matched, imported_payee=payee
                                 )
                             except Exception:
                                 t = create_transaction(
-                                    actual.session, date, account, payee, notes,
+                                    actual.session, date, account_obj, payee, notes,
                                     amount, cleared=False, imported_payee=payee
                                 )
                             already_matched.append(t)
@@ -228,7 +225,7 @@ def run():
                                 skipped += 1
                         else:
                             t = reconcile_transaction(
-                                actual.session, date, account, payee, notes,
+                                actual.session, date, account_obj, payee, notes,
                                 None, amount, cleared=True,
                                 already_matched=already_matched, imported_payee=payee
                             )
@@ -248,19 +245,62 @@ def run():
                 log.error("Error applying rules: %s", e)
 
             actual.commit()
-            log.info("Done: %d added, %d confirmed, %d skipped", added, updated, skipped)
+            log.info("Done %s: %d added, %d confirmed, %d skipped", bank_label, added, updated, skipped)
 
     except Exception as e:
-        msg = "Could not connect to Actual Budget. Check your URL and password."
+        msg = f"{bank_label}: Could not connect to Actual Budget. Check your URL and password."
         log.error(msg)
-        db.log_sync("failure", message=msg)
-        email_notify.send_failure(msg)
         return False, 0, msg
 
-    state["last_sync_date"]  = datetime.date.today().isoformat()
-    state["pending_map"]     = pending_map
-    state["imported_refs"]   = list(imported_refs)
-    _save_state(state)
-    db.log_sync("success", tx_count=added)
-    email_notify.send_success(added)
+    acct_state["last_sync_date"]  = datetime.date.today().isoformat()
+    acct_state["pending_map"]     = pending_map
+    acct_state["imported_refs"]   = list(imported_refs)
+    state["accounts"][account_id] = acct_state
     return True, added, "OK"
+
+def run():
+    log.info("Starting sync...")
+
+    # License check
+    result = licence.validate()
+    if not result["valid"]:
+        msg = f"License invalid: {result['error']}"
+        log.error(msg)
+        email_notify.send_failure(msg)
+        db.log_sync("failure", message=msg)
+        return False, 0, msg
+
+    all_accounts = db.get_all_bank_accounts()
+    if not all_accounts:
+        msg = "No bank connection found. Please connect your bank."
+        log.error(msg)
+        db.log_sync("failure", message=msg)
+        return False, 0, msg
+
+    state = _load_state()
+    total_added = 0
+    errors = []
+
+    for account in all_accounts:
+        bank_label = f"{account.get('bank_name', 'Unknown')} ({account.get('bank_country', '')})"
+        try:
+            success, added, msg = _sync_account(account, state)
+            if success:
+                total_added += added
+            else:
+                errors.append(f"{bank_label}: {msg}")
+        except Exception as e:
+            log.error("Unexpected error syncing %s: %s", bank_label, e)
+            errors.append(f"{bank_label}: {e}")
+
+    _save_state(state)
+
+    if errors:
+        msg = f"{total_added} transactions written. Errors: {'; '.join(errors)}"
+        db.log_sync("partial" if total_added > 0 else "failure", tx_count=total_added, message=msg)
+        email_notify.send_failure(msg)
+        return len(errors) == 0, total_added, msg
+    else:
+        db.log_sync("success", tx_count=total_added)
+        email_notify.send_success(total_added)
+        return True, total_added, "OK"
