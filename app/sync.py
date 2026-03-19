@@ -151,7 +151,10 @@ def _sync_account(account, state):
     try:
         raw = _fetch_transactions(account_uid, date_from)
     except requests.HTTPError as e:
-        msg = f"{bank_label}: Enable Banking returned an error. Your session may have expired."
+        if e.response is not None and e.response.status_code == 429:
+            msg = f"{bank_label}: Rate limited by the bank. Try again later."
+        else:
+            msg = f"{bank_label}: Enable Banking returned an error. Your session may have expired."
         log.error(msg)
         return False, 0, msg
 
@@ -295,9 +298,14 @@ def run():
 
     _save_state(state)
 
-    if errors:
-        msg = f"{total_added} transactions written. Errors: {'; '.join(errors)}"
-        db.log_sync("partial" if total_added > 0 else "failure", tx_count=total_added, message=msg)
+    success_count = len(all_accounts) - len(errors)
+    if errors and success_count == 0:
+        msg = f"Sync failed. Errors: {'; '.join(errors)}"
+        db.log_sync("failure", tx_count=0, message=msg)
+        email_notify.send_failure(msg)
+    elif errors:
+        msg = f"{success_count} account(s) synced ({total_added} transactions). Failed: {'; '.join(errors)}"
+        db.log_sync("partial", tx_count=total_added, message=msg)
         email_notify.send_failure(msg)
     else:
         db.log_sync("success", tx_count=total_added)
