@@ -301,10 +301,12 @@ def run():
 
     _save_state(state)
 
-    if errors and len(errors) == len(all_accounts):
+    success_count = len(all_accounts) - len(errors)
+    if errors and success_count == 0:
         email_notify.send_failure("; ".join(errors))
     elif errors:
-        email_notify.send_failure(f"{total_added} transactions synced. Failed: {'; '.join(errors)}")
+        summary = f"{success_count} account(s) synced ({total_added} transactions). Failed: {'; '.join(errors)}"
+        email_notify.send_failure(summary)
     else:
         email_notify.send_success(total_added)
 
