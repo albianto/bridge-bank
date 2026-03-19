@@ -226,9 +226,10 @@ def connect():
                 return redirect(url_for("connect"))
 
         elif action == "start":
-            bank_name      = request.form.get("bank_name", "").strip()
-            bank_country   = request.form.get("bank_country", "").strip()
-            actual_account = request.form.get("actual_account", "").strip()
+            bank_name       = request.form.get("bank_name", "").strip()
+            bank_country    = request.form.get("bank_country", "").strip()
+            actual_account  = request.form.get("actual_account", "").strip()
+            start_sync_date = request.form.get("start_sync_date", "").strip()
             if not bank_name or not bank_country:
                 error = "Please select a bank."
             elif not actual_account:
@@ -239,6 +240,7 @@ def connect():
                 db.set_setting("pending_actual_account", actual_account)
                 db.set_setting("pending_bank_name", bank_name)
                 db.set_setting("pending_bank_country", bank_country)
+                db.set_setting("pending_start_sync_date", start_sync_date)
                 try:
                     from .. import enablebanking
                     result   = enablebanking.start_auth(bank_name, bank_country)
@@ -280,6 +282,7 @@ def connect():
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         bank_account_limit=bank_account_limit,
         bank_slot_url=f"https://buy.stripe.com/4gM9AMg348nt2Y7185cMM04?client_reference_id={config.LICENCE_KEY}",
+        today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )
 
@@ -324,6 +327,7 @@ def reauthorise():
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         bank_account_limit=bank_account_limit,
         bank_slot_url=f"https://buy.stripe.com/4gM9AMg348nt2Y7185cMM04?client_reference_id={config.LICENCE_KEY}",
+        today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )
 
@@ -343,9 +347,10 @@ def callback():
         result = enablebanking.complete_auth(code=code, state=state)
         if result:
             # Retrieve pending info
-            actual_account = db.get_setting("pending_actual_account") or config.ACTUAL_ACCOUNT
-            bank_name      = db.get_setting("pending_bank_name") or config.EB_BANK_NAME
-            bank_country   = db.get_setting("pending_bank_country") or config.EB_BANK_COUNTRY
+            actual_account  = db.get_setting("pending_actual_account") or config.ACTUAL_ACCOUNT
+            bank_name       = db.get_setting("pending_bank_name") or config.EB_BANK_NAME
+            bank_country    = db.get_setting("pending_bank_country") or config.EB_BANK_COUNTRY
+            start_sync_date = db.get_setting("pending_start_sync_date") or ""
 
             # Save to bank_accounts table
             db.add_bank_account(
@@ -355,6 +360,7 @@ def callback():
                 bank_country=bank_country,
                 actual_account=actual_account,
                 session_expiry=result.get("valid_until", ""),
+                start_sync_date=start_sync_date,
             )
 
             # Clear pending settings
@@ -363,6 +369,7 @@ def callback():
             db.set_setting("pending_bank_country", "")
             db.set_setting("pending_session_state", "")
             db.set_setting("pending_session_valid_until", "")
+            db.set_setting("pending_start_sync_date", "")
 
             _start_scheduler_if_ready()
             threading.Thread(target=sync.run, daemon=True).start()

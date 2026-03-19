@@ -135,7 +135,7 @@ def _sync_account(account, state):
         state["accounts"] = {}
     acct_state = state["accounts"].get(account_id, {})
 
-    last = acct_state.get("last_sync_date") or config.START_SYNC_DATE or None
+    last = acct_state.get("last_sync_date") or account.get("start_sync_date") or config.START_SYNC_DATE or None
     if last:
         date_from = datetime.date.fromisoformat(last)
     else:

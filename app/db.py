@@ -35,9 +35,15 @@ def _ensure_tables(conn):
             bank_country TEXT NOT NULL,
             actual_account TEXT NOT NULL,
             session_expiry TEXT,
+            start_sync_date TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         )
     """)
+    # Add start_sync_date column if missing (migration)
+    try:
+        conn.execute("ALTER TABLE bank_accounts ADD COLUMN start_sync_date TEXT")
+    except Exception:
+        pass
     conn.commit()
 
     # Migrate legacy flat settings into bank_accounts table
@@ -144,12 +150,12 @@ def get_bank_account_count() -> int:
         _ensure_tables(conn)
         return conn.execute("SELECT COUNT(*) FROM bank_accounts").fetchone()[0]
 
-def add_bank_account(session_id: str, account_uid: str, bank_name: str, bank_country: str, actual_account: str, session_expiry: str = ""):
+def add_bank_account(session_id: str, account_uid: str, bank_name: str, bank_country: str, actual_account: str, session_expiry: str = "", start_sync_date: str = ""):
     with _conn() as conn:
         _ensure_tables(conn)
         conn.execute(
-            "INSERT INTO bank_accounts (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry) VALUES (?, ?, ?, ?, ?, ?)",
-            (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry)
+            "INSERT INTO bank_accounts (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry, start_sync_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (session_id, account_uid, bank_name, bank_country, actual_account, session_expiry, start_sync_date)
         )
         conn.commit()
 
