@@ -305,7 +305,7 @@ def connect():
         import requests as _requests
         key = config.LICENCE_KEY
         if key:
-            resp = _requests.post("https://api.klartion.com/info", json={"license_key": key}, timeout=5)
+            resp = _requests.post("https://api.bridgebank.app/info", json={"license_key": key}, timeout=5)
             if resp.status_code == 200:
                 bank_account_limit = resp.json().get("bank_account_limit", 2)
     except Exception:
@@ -351,7 +351,7 @@ def reauthorise():
         import requests as _requests
         key = config.LICENCE_KEY
         if key:
-            resp = _requests.post("https://api.klartion.com/info", json={"license_key": key}, timeout=5)
+            resp = _requests.post("https://api.bridgebank.app/info", json={"license_key": key}, timeout=5)
             if resp.status_code == 200:
                 bank_account_limit = resp.json().get("bank_account_limit", 2)
     except Exception:
