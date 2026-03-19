@@ -455,6 +455,7 @@ def status():
         last_sync=last_sync,
         sync_time=config.SYNC_TIME,
         sync_frequency=getattr(config, 'SYNC_FREQUENCY', '24') or '24',
+        sync_times=_get_sync_times(),
         notify_email=config.NOTIFY_EMAIL,
         activation_usage=act_info["usage"],
         activation_limit=act_info["limit"],
@@ -626,6 +627,16 @@ def banks():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _get_sync_times():
+    sync_time = config.SYNC_TIME or "06:00"
+    frequency = int(getattr(config, 'SYNC_FREQUENCY', '24') or '24')
+    h, m = int(sync_time.split(":")[0]), int(sync_time.split(":")[1])
+    times = []
+    for i in range(0, 24, frequency):
+        t_h = (h + i) % 24
+        times.append(f"{t_h:02d}:{m:02d}")
+    return ", ".join(times)
 
 def _get_days_left():
     from .. import enablebanking
