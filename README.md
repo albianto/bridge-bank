@@ -8,7 +8,7 @@ Bridge Bank connects to your EU bank via open banking and imports your transacti
 
 ## What you get
 
-- **Daily automatic sync** — transactions land in Actual Budget once a day, at a time you choose
+- **Flexible sync frequency** — sync every 6, 12, or 24 hours, at a time you choose
 - **2,500+ European banks** — Revolut, N26, Monzo, Wise, Millennium BCP, Santander, ING, BNP Paribas, and more across 29 countries
 - **Multiple bank accounts** — connect up to 2 bank accounts by default, each syncing to a different Actual Budget account. Need more? Purchase additional slots from the status page.
 - **Read-only, always** — Bridge Bank can never move money or modify your account
@@ -78,10 +78,11 @@ Open **http://your-server-address:3002** in your browser. The setup wizard will 
 The browser-based wizard walks you through five steps:
 
 1. **License** — enter your key to activate Bridge Bank on this machine
-2. **Actual Budget** — enter your Actual Budget URL, password, Sync ID, and the date to start syncing from
-3. **Notifications** — set your email, SMTP credentials, and daily sync time
-4. **Bank** — upload your Enable Banking `.pem` file (App ID is filled automatically from the filename), then connect your bank via OAuth. You choose which Actual Budget account each bank syncs to.
-5. **Status** — view sync history, manage bank connections, check for updates
+2. **Actual Budget** — enter your Actual Budget URL, password, and Sync ID
+3. **Notifications** — set your email and SMTP credentials
+4. **Sync** — choose your sync frequency (every 6, 12, or 24 hours) and start date
+5. **Bank** — upload your Enable Banking `.pem` file (App ID is filled automatically from the filename), then connect your bank via OAuth. You choose which Actual Budget account each bank syncs to.
+6. **Status** — view sync history, manage bank connections, check for updates
 
 You can connect up to 2 bank accounts by default. Each bank syncs to a different Actual Budget account (e.g. Revolut → "Revolut", N26 → "N26"). To add a second bank, go to the **Bank** tab and search for another bank.
 
