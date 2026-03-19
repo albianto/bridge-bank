@@ -407,18 +407,31 @@ def status():
     # Fun stats
     import random
     all_syncs = db.get_recent_syncs(limit=9999)
-    # Streak: count how many of the last sync runs had at least one success
+    # Streak: group entries by sync run (within 30s of each other), count runs with at least one success
     streak = 0
-    seen_success = False
-    for r in db.get_recent_syncs(limit=200):
-        if r["status"] == "success":
-            if not seen_success:
+    recent = db.get_recent_syncs(limit=200)
+    if recent:
+        from datetime import datetime
+        runs = []
+        current_run = [recent[0]]
+        for r in recent[1:]:
+            try:
+                t1 = datetime.fromisoformat(current_run[-1]["ran_at"])
+                t2 = datetime.fromisoformat(r["ran_at"])
+                if abs((t1 - t2).total_seconds()) < 30:
+                    current_run.append(r)
+                else:
+                    runs.append(current_run)
+                    current_run = [r]
+            except Exception:
+                runs.append(current_run)
+                current_run = [r]
+        runs.append(current_run)
+        for run in runs:
+            if any(e["status"] == "success" for e in run):
                 streak += 1
-                seen_success = True
-        elif r["status"] == "failure":
-            if not seen_success:
+            else:
                 break
-            seen_success = False
     total_tx = sum(r.get("tx_count", 0) for r in all_syncs if r["status"] == "success")
 
     fun_messages = [
