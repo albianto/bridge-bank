@@ -176,15 +176,20 @@ async function runUpdate() {
   status.style.display = 'block';
   status.textContent = 'Checking for updates...';
   try {
-    const resp = await fetch('/update/run', { method: 'POST' });
-    const data = await resp.json();
-    if (data.up_to_date) {
+    const check = await fetch('/update/check');
+    const checkData = await check.json();
+    if (!checkData.available) {
       status.textContent = 'Already up to date.';
       btn.textContent = 'Check for updates';
       btn.disabled = false;
       setTimeout(function() { status.style.display = 'none'; }, 3000);
-    } else if (data.updating) {
-      status.textContent = 'Update found. Restarting...';
+      return;
+    }
+    status.textContent = 'Update found. Installing...';
+    const resp = await fetch('/update/run', { method: 'POST' });
+    const data = await resp.json();
+    if (data.updating) {
+      status.textContent = 'Restarting...';
       setTimeout(function pollServer() {
         fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
       }, 5000);
