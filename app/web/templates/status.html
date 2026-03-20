@@ -123,22 +123,30 @@ async function copyLogs() {
   var status = document.getElementById('logs-status');
   btn.textContent = 'Fetching...';
   btn.disabled = true;
+  status.style.display = 'block';
   try {
     var resp = await fetch('/api/logs?lines=200');
     var data = await resp.json();
-    if (data.logs) {
-      await navigator.clipboard.writeText(data.logs);
-      status.style.display = 'block';
-      status.textContent = 'Logs copied to clipboard. Paste them in your support email.';
-      status.style.color = '#10b981';
-      setTimeout(function() { status.style.display = 'none'; }, 5000);
-    } else {
-      status.style.display = 'block';
-      status.textContent = data.error || 'Could not fetch logs.';
+    if (!data.logs) {
+      status.textContent = data.error || 'No logs available.';
       status.style.color = '#ef4444';
+    } else {
+      try {
+        await navigator.clipboard.writeText(data.logs);
+        status.textContent = 'Logs copied to clipboard.';
+        status.style.color = '#10b981';
+      } catch(clipErr) {
+        // Clipboard API may not be available — show logs in a textarea instead
+        var ta = document.createElement('textarea');
+        ta.value = data.logs;
+        ta.style.cssText = 'width:100%;height:120px;margin-top:8px;background:#080b12;color:#94a3b8;border:1px solid #253450;border-radius:6px;font-size:11px;font-family:monospace;padding:8px;';
+        status.textContent = 'Select all and copy:';
+        status.style.color = '#94a3b8';
+        status.parentNode.insertBefore(ta, status.nextSibling);
+        ta.select();
+      }
     }
   } catch(e) {
-    status.style.display = 'block';
     status.textContent = 'Could not fetch logs.';
     status.style.color = '#ef4444';
   }

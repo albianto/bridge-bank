@@ -48,7 +48,23 @@ def send(subject: str, body: str, raise_on_error: bool = False):
     except Exception as e:
         logger.warning("Failed to send email: %s", e)
         if raise_on_error:
-            raise
+            raise RuntimeError(_friendly_smtp_error(e)) from e
+
+
+def _friendly_smtp_error(e):
+    """Convert SMTP exceptions to human-readable messages."""
+    msg = str(e).lower()
+    if "authentication failed" in msg or "535" in msg:
+        return "Wrong password. Check your app-specific password and try again."
+    if "username and password not accepted" in msg:
+        return "Wrong email or password. Check your credentials and try again."
+    if "connection refused" in msg or "errno 111" in msg:
+        return "Could not connect to the email server. Check your email address."
+    if "timed out" in msg or "timeout" in msg:
+        return "Email server did not respond. Try again in a moment."
+    if "relay" in msg or "sender" in msg:
+        return "Your email provider rejected the message. Make sure the 'send from' address is correct."
+    return f"Email failed: {e}"
 
 
 def send_success(tx_count: int):
