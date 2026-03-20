@@ -442,23 +442,28 @@ def callback():
     state = request.args.get("state", "")
     error = request.args.get("error")
     if error or not code:
+        logger.warning("Callback received error=%s code=%s", error, bool(code))
         return redirect(url_for("connect") + "?error=auth_failed")
     try:
         from .. import enablebanking
         result = enablebanking.complete_auth(code=code, state=state)
         if result:
             accounts = result["accounts"]
+            logger.info("Callback: %d account(s) returned, session=%s", len(accounts), result["session_id"])
             if len(accounts) == 1:
                 account_uid = accounts[0].get("uid") or accounts[0].get("account_uid") or accounts[0].get("resource_id")
+                logger.info("Auto-connecting single account uid=%s", account_uid)
                 _save_bank_account(result["session_id"], account_uid, result.get("valid_until", ""))
                 return redirect(url_for("status"))
             else:
                 import json
+                logger.info("Multiple accounts — redirecting to account picker")
                 db.set_setting("pending_auth_session_id", result["session_id"])
                 db.set_setting("pending_auth_accounts", json.dumps(accounts))
                 db.set_setting("pending_auth_valid_until", result.get("valid_until", ""))
                 return redirect(url_for("pick_account"))
         else:
+            logger.warning("Callback: complete_auth returned no accounts")
             return redirect(url_for("connect") + "?error=auth_failed")
     except Exception as e:
         logger.error("Callback failed: %s", e)
@@ -650,6 +655,19 @@ def disconnect():
         db.remove_bank_account(int(account_id))
     return redirect(url_for("connect"))
 
+@app.route("/reset-sync", methods=["POST"])
+def reset_sync():
+    account_id = request.form.get("account_id")
+    if account_id:
+        from .. import sync as sync_mod
+        state = sync_mod._load_state()
+        acct_state = state.get("accounts", {})
+        if account_id in acct_state:
+            del acct_state[account_id]
+            sync_mod._save_state(state)
+            logger.info("Reset sync state for account %s", account_id)
+    return redirect(url_for("connect"))
+
 # ---------------------------------------------------------------------------
 # Banks
 # ---------------------------------------------------------------------------
@@ -691,8 +709,11 @@ def update_check():
             capture_output=True, text=True, timeout=10
         ).stdout.strip()
         local_sha = local_digest.split("@")[-1] if "@" in local_digest else ""
-        return jsonify({"available": remote_digest != local_sha and remote_digest != ""})
-    except Exception:
+        available = remote_digest != local_sha and remote_digest != ""
+        logger.info("Update check: remote=%s local=%s available=%s", remote_digest[:20], local_sha[:20], available)
+        return jsonify({"available": available})
+    except Exception as e:
+        logger.warning("Update check failed: %s", e)
         return jsonify({"available": False})
 
 @app.route("/update/run", methods=["POST"])
@@ -705,8 +726,10 @@ def update_run():
             ["docker", "pull", IMAGE_NAME],
             capture_output=True, text=True, timeout=120
         )
+        logger.info("Docker pull output: %s", pull.stdout.strip() or pull.stderr.strip())
         if "Image is up to date" in pull.stdout or "Image is up to date" in pull.stderr:
             return jsonify({"up_to_date": True})
+        logger.info("New image pulled — recreating container via docker compose up -d")
         subprocess.Popen(
             ["sh", "-c", "sleep 2 && cd /compose && docker compose up -d"],
             start_new_session=True
