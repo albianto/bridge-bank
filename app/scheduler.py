@@ -26,9 +26,15 @@ def _parse_time(time_str):
     parts = time_str.split(":")
     return int(parts[0]), int(parts[1])
 
+_started = False
+
 def start():
+    global _started
     sync_time = config.SYNC_TIME or "06:00"
     frequency = int(getattr(config, 'SYNC_FREQUENCY', '24') or '24')
+
+    # Clear any previously scheduled jobs (e.g. if settings changed)
+    schedule.clear()
 
     if frequency == 0:
         logger.info("Scheduler disabled (manual only mode)")
@@ -52,11 +58,13 @@ def start():
         logger.info("Catch-up sync needed. Running now.")
         threading.Thread(target=sync.run, daemon=True).start()
 
-    def loop():
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
+    # Only start the loop thread once
+    if not _started:
+        _started = True
+        def loop():
+            while True:
+                schedule.run_pending()
+                time.sleep(60)
+        threading.Thread(target=loop, daemon=True).start()
 
-    thread = threading.Thread(target=loop, daemon=True)
-    thread.start()
     logger.info("Scheduler running.")
