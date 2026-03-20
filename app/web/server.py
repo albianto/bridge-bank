@@ -623,20 +623,6 @@ def sync_now():
 def sync_status():
     return jsonify({"running": _sync_running})
 
-@app.route("/sync/reset", methods=["POST"])
-def sync_reset():
-    import json, os
-    state_file = "/data/state.json"
-    if os.path.exists(state_file):
-        with open(state_file) as f:
-            state = json.load(f)
-        state.pop("last_sync_date", None)
-        for key in list(state.get("accounts", {}).keys()):
-            state["accounts"][key].pop("last_sync_date", None)
-        with open(state_file, "w") as f:
-            json.dump(state, f, indent=2)
-    db.clear_sync_log()
-    return redirect(url_for("setup_sync"))
 
 # ---------------------------------------------------------------------------
 # Disconnect

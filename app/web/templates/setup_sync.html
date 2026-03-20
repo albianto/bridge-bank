@@ -35,13 +35,6 @@
     <button class="btn btn-primary" type="submit">{% if is_configured %}Save{% else %}Continue &rarr;{% endif %}</button>
   </form>
   {% if is_configured %}
-  <div style="margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border);">
-    <div style="font-size:13px; font-weight:600; margin-bottom:0.35rem;">Reset sync</div>
-    <div style="font-size:11px; color:#4a5568; margin-bottom:0.75rem;">Re-import transactions from your start date. Useful after connecting a new bank or if transactions are missing. Existing transactions in Actual Budget won't be duplicated.</div>
-    <form method="POST" action="/sync/reset" onsubmit="return confirm('This will re-sync all transactions from your start date on the next sync. Continue?');">
-      <button type="submit" class="btn btn-ghost" style="font-size:13px;">Reset sync &rarr;</button>
-    </form>
-  </div>
   {% endif %}
 </div>
 {% if not has_synced %}
