@@ -817,16 +817,22 @@ def update_run():
             return jsonify({"error": "Compose file mount not found. Make sure the docker-compose.yml directory is mounted at /compose."}), 400
         # Spawn a helper container to run docker compose up -d. This avoids the
         # race condition of trying to stop/recreate ourselves from within.
-        compose_cmd = f"sleep 2 && docker compose -f /compose/docker-compose.yml up -d --force-recreate"
+        # Mount the compose directory at its real host path so that relative
+        # volume paths (./data:/data etc.) resolve to correct host paths.
+        compose_file = f"{compose_host_path}/docker-compose.yml"
+        compose_cmd = f"sleep 2 && docker compose -f '{compose_file}' up -d --force-recreate"
         helper_cmd = [
             "docker", "run", "-d", "--rm",
             "-v", "/var/run/docker.sock:/var/run/docker.sock",
-            "-v", f"{compose_host_path}:/compose:ro",
+            "-v", f"{compose_host_path}:{compose_host_path}:ro",
             IMAGE_NAME,
             "sh", "-c", compose_cmd,
         ]
         logger.info("Update via helper container: %s", " ".join(helper_cmd))
-        subprocess.run(helper_cmd, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(helper_cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            logger.error("Failed to start update helper: %s", result.stderr.strip())
+            return jsonify({"error": "Failed to start update. Try running: docker compose pull && docker compose up -d"}), 500
         db.set_setting("update_available", "0")
         return jsonify({"updating": True})
     except FileNotFoundError:
