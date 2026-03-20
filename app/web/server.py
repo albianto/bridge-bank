@@ -178,6 +178,14 @@ def setup_notifications():
 
 @app.route("/email/test", methods=["POST"])
 def test_email():
+    # Save current form values so the test uses what the user sees
+    data = request.get_json(silent=True) or {}
+    if data.get("notify_email"):
+        config.set("NOTIFY_EMAIL", data["notify_email"].strip())
+    if data.get("smtp_user"):
+        config.set("SMTP_USER", data["smtp_user"].strip())
+    if data.get("smtp_password"):
+        config.set("SMTP_PASSWORD", data["smtp_password"].strip())
     try:
         from .. import email_notify
         email_notify.send("Bridge Bank: test email", "This is a test email from Bridge Bank. If you're reading this, your email notifications are working correctly.", raise_on_error=True)
