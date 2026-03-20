@@ -18,6 +18,13 @@ def _get_secret_key():
 
 app.secret_key = _get_secret_key()
 
+import os
+APP_VERSION = os.environ.get("APP_VERSION", "dev")
+
+@app.context_processor
+def inject_version():
+    return {"app_version": APP_VERSION}
+
 def _detect_container_name():
     """Detect container name from mounted compose file or fall back to default."""
     import os
@@ -248,6 +255,10 @@ def setup_sync():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+@app.route("/api/version")
+def api_version():
+    return jsonify({"version": APP_VERSION})
 
 # ---------------------------------------------------------------------------
 # API endpoints
