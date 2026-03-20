@@ -802,33 +802,31 @@ def update_run():
         if image_is_same and container_current:
             return jsonify({"up_to_date": True})
         logger.info("Recreating container (new_image=%s, container_outdated=%s)", not image_is_same, not container_current)
-        # docker compose up -d can't work from inside the container because it
-        # can't stop itself. Read mount/port config from the running container
-        # and recreate with docker run.
+        # Find the host path of the compose file from the /compose mount
         import json as _json
         mounts_json = subprocess.run(
             ["docker", "inspect", "--format", "{{json .Mounts}}", CONTAINER_NAME],
             capture_output=True, text=True, timeout=5
         ).stdout.strip()
-        ports_json = subprocess.run(
-            ["docker", "inspect", "--format", "{{json .HostConfig.PortBindings}}", CONTAINER_NAME],
-            capture_output=True, text=True, timeout=5
-        ).stdout.strip()
-        vol_args = []
+        compose_host_path = ""
         for m in _json.loads(mounts_json or "[]"):
-            ro = ":ro" if not m.get("RW", True) else ""
-            vol_args += ["-v", f"{m['Source']}:{m['Destination']}{ro}"]
-        port_args = []
-        for container_port, bindings in _json.loads(ports_json or "{}").items():
-            for b in (bindings or []):
-                host_port = b.get("HostPort", "")
-                if host_port:
-                    port_args += ["-p", f"{host_port}:{container_port.split('/')[0]}"]
-        run_parts = ["docker", "run", "-d", "--name", CONTAINER_NAME, "--restart", "unless-stopped"] + port_args + vol_args + [IMAGE_NAME]
-        run_cmd = " ".join(run_parts)
-        full_cmd = f"sleep 2 && docker stop {CONTAINER_NAME} && docker rm {CONTAINER_NAME} && {run_cmd}"
-        logger.info("Update command: %s", full_cmd)
-        subprocess.Popen(["sh", "-c", full_cmd], start_new_session=True)
+            if m.get("Destination") == "/compose":
+                compose_host_path = m["Source"]
+                break
+        if not compose_host_path:
+            return jsonify({"error": "Compose file mount not found. Make sure the docker-compose.yml directory is mounted at /compose."}), 400
+        # Spawn a helper container to run docker compose up -d. This avoids the
+        # race condition of trying to stop/recreate ourselves from within.
+        compose_cmd = f"sleep 2 && docker compose -f /compose/docker-compose.yml up -d --force-recreate"
+        helper_cmd = [
+            "docker", "run", "-d", "--rm",
+            "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "-v", f"{compose_host_path}:/compose:ro",
+            IMAGE_NAME,
+            "sh", "-c", compose_cmd,
+        ]
+        logger.info("Update via helper container: %s", " ".join(helper_cmd))
+        subprocess.run(helper_cmd, capture_output=True, text=True, timeout=15)
         db.set_setting("update_available", "0")
         return jsonify({"updating": True})
     except FileNotFoundError:
