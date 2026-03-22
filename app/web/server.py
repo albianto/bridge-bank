@@ -217,7 +217,7 @@ def test_email():
         config.set("SMTP_USER", data["smtp_user"].strip())
     if data.get("smtp_password"):
         config.set("SMTP_PASSWORD", data["smtp_password"].strip())
-      if data.get("smtp_from"):
+    if data.get("smtp_from"):
         config.set("SMTP_FROM", data["smtp_from"].strip())
     if data.get("smtp_host"):
         config.set("SMTP_HOST", data["smtp_host"].strip())
