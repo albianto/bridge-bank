@@ -123,6 +123,33 @@ def _parse_notes(t):
 def _get_entry_ref(t):
     return t.get("entry_reference") or t.get("transaction_id") or ""
 
+def _patch_payee_name_rules(session):
+    """Remap 'payee_name' to 'description' in rule actions so actualpy can process them.
+
+    Actual Budget uses 'payee_name' for set-payee actions, but actualpy only
+    accepts 'description' (which it maps to payee_id internally). Without this
+    patch, run_rules() raises a Pydantic validation error and no rules apply."""
+    import json
+    from actual.queries import get_rules
+    field_map = {"payee_name": "description", "imported_payee": "imported_description"}
+    for rule in get_rules(session):
+        for attr in ("conditions", "actions"):
+            raw = getattr(rule, attr, None)
+            if not raw:
+                continue
+            try:
+                items = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            patched = False
+            for item in items:
+                old = item.get("field")
+                if old in field_map:
+                    item["field"] = field_map[old]
+                    patched = True
+            if patched:
+                setattr(rule, attr, json.dumps(items))
+
 def _sync_account(account, state):
     """Sync a single bank account. Returns (success, tx_count, message)."""
     account_id = str(account["id"])
@@ -259,6 +286,7 @@ def _sync_account(account, state):
                     log.warning("Skipping transaction: %s | %s", e, txn)
 
             try:
+                _patch_payee_name_rules(actual.session)
                 actual.run_rules(new_txn)
             except Exception as e:
                 log.error("Error applying rules: %s", e)
