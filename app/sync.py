@@ -150,6 +150,35 @@ def _patch_payee_name_rules(session):
             if patched:
                 setattr(rule, attr, json.dumps(items))
 
+def _fix_rule_note_casing(session, transactions):
+    """Restore original case for notes set by rules.
+
+    actualpy lowercases all string values via get_normalized_string(), including
+    SET action values for notes. This compares each transaction's notes against
+    the lowercased rule value and restores the original case if they match."""
+    import json, unicodedata
+    from actual.queries import get_rules
+    note_rules = []
+    for rule in get_rules(session):
+        try:
+            actions = json.loads(rule.actions)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for action in actions:
+            if action.get("field") == "notes" and action.get("op") == "set" and action.get("value"):
+                original = action["value"]
+                lowered = unicodedata.normalize("NFD", original.lower())
+                note_rules.append((lowered, original))
+    if not note_rules:
+        return
+    for txn in transactions:
+        if not txn.notes:
+            continue
+        for lowered, original in note_rules:
+            if txn.notes == lowered:
+                txn.notes = original
+                break
+
 def _sync_account(account, state):
     """Sync a single bank account. Returns (success, tx_count, message)."""
     account_id = str(account["id"])
@@ -288,6 +317,7 @@ def _sync_account(account, state):
             try:
                 _patch_payee_name_rules(actual.session)
                 actual.run_rules(new_txn)
+                _fix_rule_note_casing(actual.session, new_txn)
             except Exception as e:
                 log.error("Error applying rules: %s", e)
 
