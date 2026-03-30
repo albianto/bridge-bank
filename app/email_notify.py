@@ -1,9 +1,25 @@
 import smtplib
 import logging
+import requests
 from email.mime.text import MIMEText
 from . import config
 
 logger = logging.getLogger(__name__)
+
+_unsubscribed_cache = {}
+
+def _is_unsubscribed(email: str) -> bool:
+    import time
+    now = time.time()
+    if email in _unsubscribed_cache and now - _unsubscribed_cache[email][1] < 3600:
+        return _unsubscribed_cache[email][0]
+    try:
+        resp = requests.post("https://api.bridgebank.app/is-unsubscribed", json={"email": email}, timeout=5)
+        result = resp.ok and resp.json().get("unsubscribed", False)
+    except Exception:
+        result = False
+    _unsubscribed_cache[email] = (result, now)
+    return result
 
 
 def _smtp_host_for(email: str) -> str:
@@ -32,6 +48,9 @@ def send(subject: str, body: str, raise_on_error: bool = False):
         if raise_on_error:
             raise RuntimeError(msg)
         logger.warning("Email not sent (%s) — %s", subject, msg)
+        return
+    if _is_unsubscribed(config.NOTIFY_EMAIL):
+        logger.info("Skipping email for unsubscribed %s: %s", config.NOTIFY_EMAIL, subject)
         return
     mime = MIMEText(body)
     mime["Subject"] = subject
