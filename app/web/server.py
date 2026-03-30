@@ -42,6 +42,13 @@ def _detect_container_name():
 CONTAINER_NAME = _detect_container_name()
 IMAGE_NAME = "daalves/bridge-bank:latest"
 
+def _get_bank_account_limit() -> int:
+    try:
+        info = licence.get_activation_info()
+        return max(1, int(info.get("bank_account_limit", 2) or 2))
+    except Exception:
+        return 2
+
 COUNTRIES = [
     ("AT","Austria"),("BE","Belgium"),("HR","Croatia"),("CY","Cyprus"),
     ("CZ","Czech Republic"),("DK","Denmark"),("EE","Estonia"),("FI","Finland"),
@@ -431,6 +438,8 @@ def connect():
                 error = "Please select a bank."
             elif not actual_account:
                 error = "Please enter the Actual Budget account name."
+            elif db.get_bank_account_count() >= _get_bank_account_limit():
+                error = "Bank account limit reached. Disconnect a bank or add another slot before connecting a new one."
             else:
                 # Validate that the account exists in Actual Budget
                 try:
@@ -446,6 +455,7 @@ def connect():
                 except Exception as e:
                     logger.warning("Could not validate Actual account: %s", e)
                 if not error:
+                    db.set_setting("pending_reauth_account_id", "")
                     config.set("EB_BANK_NAME", bank_name)
                     config.set("EB_BANK_COUNTRY", bank_country)
                     db.set_setting("pending_actual_account", actual_account)
@@ -469,6 +479,7 @@ def connect():
             db.set_setting("pending_actual_account", "")
             db.set_setting("pending_bank_name", "")
             db.set_setting("pending_bank_country", "")
+            db.set_setting("pending_reauth_account_id", "")
             return redirect(url_for("connect"))
 
     all_accounts = db.get_all_bank_accounts()
@@ -477,16 +488,7 @@ def connect():
     pem_ready    = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
 
     # Fetch bank account limit from licence API
-    bank_account_limit = 2
-    try:
-        import requests as _requests
-        key = config.LICENCE_KEY
-        if key:
-            resp = _requests.post("https://api.bridgebank.app/info", json={"license_key": key}, timeout=5)
-            if resp.status_code == 200:
-                bank_account_limit = resp.json().get("bank_account_limit", 2)
-    except Exception:
-        pass
+    bank_account_limit = _get_bank_account_limit()
 
     return render_template("connect.html",
         error=error,
@@ -508,12 +510,14 @@ def connect():
 
 @app.route("/connect/reauthorise", methods=["POST"])
 def reauthorise():
+    account_id = request.form.get("account_id", "").strip()
     bank_name    = request.form.get("bank_name", "").strip()
     bank_country = request.form.get("bank_country", "").strip()
     if not bank_name or not bank_country:
         return redirect(url_for("connect"))
     try:
         from .. import enablebanking
+        db.set_setting("pending_reauth_account_id", account_id)
         db.set_setting("pending_bank_name", bank_name)
         db.set_setting("pending_bank_country", bank_country)
         result   = enablebanking.start_auth(bank_name, bank_country)
@@ -523,16 +527,7 @@ def reauthorise():
         return redirect(url_for("connect") + f"?error=Could not start re-authorisation: {e}")
 
     all_accounts = db.get_all_bank_accounts()
-    bank_account_limit = 2
-    try:
-        import requests as _requests
-        key = config.LICENCE_KEY
-        if key:
-            resp = _requests.post("https://api.bridgebank.app/info", json={"license_key": key}, timeout=5)
-            if resp.status_code == 200:
-                bank_account_limit = resp.json().get("bank_account_limit", 2)
-    except Exception:
-        pass
+    bank_account_limit = _get_bank_account_limit()
 
     return render_template("connect.html",
         error=None,
@@ -552,22 +547,34 @@ def reauthorise():
 # ---------------------------------------------------------------------------
 
 def _save_bank_account(session_id, account_uid, valid_until):
+    reauth_account_id = (db.get_setting("pending_reauth_account_id") or "").strip()
     actual_account  = db.get_setting("pending_actual_account") or config.ACTUAL_ACCOUNT
     bank_name       = db.get_setting("pending_bank_name") or config.EB_BANK_NAME
     bank_country    = db.get_setting("pending_bank_country") or config.EB_BANK_COUNTRY
     start_sync_date = db.get_setting("pending_start_sync_date") or ""
-    db.add_bank_account(
-        session_id=session_id,
-        account_uid=account_uid,
-        bank_name=bank_name,
-        bank_country=bank_country,
-        actual_account=actual_account,
-        session_expiry=valid_until,
-        start_sync_date=start_sync_date,
-    )
+    if reauth_account_id:
+        account_id = int(reauth_account_id)
+        db.update_bank_account_field(account_id, "session_id", session_id)
+        db.update_bank_account_field(account_id, "account_uid", account_uid)
+        db.update_bank_account_field(account_id, "session_expiry", valid_until)
+        db.update_bank_account_field(account_id, "bank_name", bank_name)
+        db.update_bank_account_field(account_id, "bank_country", bank_country)
+    else:
+        if db.get_bank_account_count() >= _get_bank_account_limit():
+            raise ValueError("Bank account limit reached. Disconnect a bank or add another slot before connecting a new one.")
+        db.add_bank_account(
+            session_id=session_id,
+            account_uid=account_uid,
+            bank_name=bank_name,
+            bank_country=bank_country,
+            actual_account=actual_account,
+            session_expiry=valid_until,
+            start_sync_date=start_sync_date,
+        )
     # Clear pending settings
     for key in ["pending_actual_account", "pending_bank_name", "pending_bank_country",
-                "pending_start_sync_date", "pending_session_state", "pending_session_valid_until"]:
+                "pending_start_sync_date", "pending_session_state", "pending_session_valid_until",
+                "pending_reauth_account_id"]:
         db.set_setting(key, "")
     _start_scheduler_if_ready()
     threading.Thread(target=sync.run, daemon=True).start()
@@ -621,7 +628,10 @@ def pick_account_post():
         return redirect(url_for("pick_account"))
     session_id  = db.get_setting("pending_auth_session_id")
     valid_until = db.get_setting("pending_auth_valid_until")
-    _save_bank_account(session_id, account_uid, valid_until)
+    try:
+        _save_bank_account(session_id, account_uid, valid_until)
+    except Exception as e:
+        return redirect(url_for("connect") + "?error=" + str(e))
     for key in ["pending_auth_session_id", "pending_auth_accounts", "pending_auth_valid_until"]:
         db.set_setting(key, "")
     return redirect(url_for("status"))

@@ -85,6 +85,7 @@
       <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#4a5568;">
         <span>Expires {{ a.session_expiry[:10] }}</span>
         <form method="POST" action="/connect/reauthorise" style="display:inline;">
+          <input type="hidden" name="account_id" value="{{ a.id }}">
           <input type="hidden" name="bank_name" value="{{ a.bank_name }}">
           <input type="hidden" name="bank_country" value="{{ a.bank_country }}">
           <button type="submit" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:11px;text-decoration:underline;">Re-authorise</button>

@@ -160,7 +160,7 @@ def add_bank_account(session_id: str, account_uid: str, bank_name: str, bank_cou
         conn.commit()
 
 def update_bank_account_field(account_id: int, field: str, value: str):
-    allowed = {"start_sync_date", "session_id", "account_uid", "session_expiry", "actual_account"}
+    allowed = {"start_sync_date", "session_id", "account_uid", "session_expiry", "actual_account", "bank_name", "bank_country"}
     if field not in allowed:
         raise ValueError(f"Field {field} is not updatable")
     with _conn() as conn:
