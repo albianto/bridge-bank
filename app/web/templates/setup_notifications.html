@@ -51,6 +51,14 @@
     <button class="btn btn-primary" type="submit">Continue &rarr;</button>
   </form>
 </div>
+{% if notify_email %}
+<div class="card" style="margin-top:1rem;" id="unsub-card">
+  <div class="card-title" style="font-size:14px;">Email preferences</div>
+  <p id="unsub-status" style="font-size:13px;color:var(--muted);margin:0.5rem 0;"></p>
+  <button type="button" class="btn btn-ghost" id="unsub-btn" onclick="toggleUnsubscribe()" style="font-size:12px;" disabled>Loading...</button>
+  <div id="unsub-msg" style="font-size:12px;margin-top:6px;min-height:18px;"></div>
+</div>
+{% endif %}
 <script>
 function togglePw() {
   const f = document.getElementById('smtp_password');
@@ -90,5 +98,62 @@ async function sendTestEmail() {
   btn.textContent = 'Send test email';
   btn.disabled = false;
 }
+var _isUnsub = false;
+async function checkUnsubStatus() {
+  try {
+    var res = await fetch('/email/unsubscribe-status');
+    var data = await res.json();
+    _isUnsub = data.unsubscribed;
+    updateUnsubUI();
+  } catch(e) {
+    var el = document.getElementById('unsub-status');
+    if (el) { el.textContent = 'Could not check email status.'; }
+    var btn = document.getElementById('unsub-btn');
+    if (btn) { btn.style.display = 'none'; }
+  }
+}
+function updateUnsubUI() {
+  var btn = document.getElementById('unsub-btn');
+  var status = document.getElementById('unsub-status');
+  if (!btn || !status) return;
+  btn.disabled = false;
+  if (_isUnsub) {
+    status.textContent = 'You are unsubscribed from all Bridge Bank emails (sync notifications, trial reminders, and product updates).';
+    btn.textContent = 'Re-enable emails';
+    btn.className = 'btn btn-ghost';
+    btn.style.color = '';
+  } else {
+    status.textContent = 'You are currently receiving email notifications.';
+    btn.textContent = 'Stop all emails';
+    btn.className = 'btn btn-ghost';
+    btn.style.color = '#ef4444';
+  }
+}
+async function toggleUnsubscribe() {
+  var btn = document.getElementById('unsub-btn');
+  var msg = document.getElementById('unsub-msg');
+  btn.disabled = true;
+  btn.textContent = _isUnsub ? 'Re-enabling...' : 'Unsubscribing...';
+  try {
+    var endpoint = _isUnsub ? '/email/resubscribe' : '/email/unsubscribe';
+    var res = await fetch(endpoint, { method: 'POST' });
+    var data = await res.json();
+    if (res.ok) {
+      _isUnsub = !_isUnsub;
+      updateUnsubUI();
+      msg.textContent = _isUnsub ? 'You have been unsubscribed from all emails.' : 'Emails have been re-enabled.';
+      msg.style.color = '#10b981';
+    } else {
+      msg.textContent = data.error || 'Something went wrong.';
+      msg.style.color = '#ef4444';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    msg.textContent = 'Request failed.';
+    msg.style.color = '#ef4444';
+    btn.disabled = false;
+  }
+}
+checkUnsubStatus();
 </script>
 {% endblock %}
