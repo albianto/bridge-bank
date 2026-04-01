@@ -1,25 +1,9 @@
 import smtplib
 import logging
-import requests
 from email.mime.text import MIMEText
 from . import config
 
 logger = logging.getLogger(__name__)
-
-_unsubscribed_cache = {}
-
-def _is_unsubscribed(email: str) -> bool:
-    import time
-    now = time.time()
-    if email in _unsubscribed_cache and now - _unsubscribed_cache[email][1] < 3600:
-        return _unsubscribed_cache[email][0]
-    try:
-        resp = requests.post("https://api.bridgebank.app/is-unsubscribed", json={"email": email}, timeout=5)
-        result = resp.ok and resp.json().get("unsubscribed", False)
-    except Exception:
-        result = False
-    _unsubscribed_cache[email] = (result, now)
-    return result
 
 
 def _smtp_host_for(email: str) -> str:
@@ -48,9 +32,6 @@ def send(subject: str, body: str, raise_on_error: bool = False):
         if raise_on_error:
             raise RuntimeError(msg)
         logger.warning("Email not sent (%s) — %s", subject, msg)
-        return
-    if _is_unsubscribed(config.NOTIFY_EMAIL):
-        logger.info("Skipping email for unsubscribed %s: %s", config.NOTIFY_EMAIL, subject)
         return
     mime = MIMEText(body)
     mime["Subject"] = subject
@@ -110,20 +91,6 @@ def send_partial(successes: list, errors: list):
         lines.append(f"  ✗ {e}")
     body = "Sync finished with some errors:\n\n" + "\n".join(lines) + f"\n\nOpen Bridge Bank at {config.BRIDGE_BANK_URL} to check your configuration."
     send("Bridge Bank: sync partially complete", body)
-
-
-def send_trial_expiry_warning(days_left: int):
-    send(
-        f"Bridge Bank: trial expires in {days_left} day{'s' if days_left != 1 else ''}",
-        f"Your Bridge Bank free trial expires in {days_left} day{'s' if days_left != 1 else ''}.\n\nPurchase a licence at https://bridgebank.app to keep syncing your transactions."
-    )
-
-
-def send_trial_expired():
-    send(
-        "Bridge Bank: trial expired",
-        f"Your Bridge Bank free trial has expired. Syncing is paused until a licence is activated.\n\nPurchase a licence at https://bridgebank.app to resume syncing your transactions."
-    )
 
 
 def send_session_expiry_warning(days_left: int):

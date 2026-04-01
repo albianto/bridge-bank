@@ -139,6 +139,8 @@ def setup_actual():
                 config.set("ACTUAL_PASSWORD", password)
                 config.set("ACTUAL_SYNC_ID", sync_id)
                 config.set("ACTUAL_ACCOUNT", account)
+                if config.NOTIFY_ENABLED.lower() in ("false", "0", "no"):
+                    return redirect(url_for("connect"))
                 return redirect(url_for("setup_notifications"))
     return render_template("setup_actual.html",
         error=error,
@@ -213,45 +215,15 @@ def test_email():
 
 @app.route("/email/unsubscribe-status")
 def unsubscribe_status():
-    email = config.NOTIFY_EMAIL
-    if not email:
-        return jsonify({"unsubscribed": False})
-    try:
-        import requests as _requests
-        resp = _requests.post("https://api.bridgebank.app/is-unsubscribed", json={"email": email}, timeout=5)
-        return jsonify({"unsubscribed": resp.ok and resp.json().get("unsubscribed", False)})
-    except Exception:
-        return jsonify({"unsubscribed": False})
+    return jsonify({"unsubscribed": False})
 
 @app.route("/email/unsubscribe", methods=["POST"])
 def unsubscribe_email():
-    email = config.NOTIFY_EMAIL
-    if not email:
-        return jsonify({"error": "No notification email configured"}), 400
-    try:
-        import requests as _requests
-        resp = _requests.get(f"https://api.bridgebank.app/unsubscribe?email={email}", timeout=5)
-        if resp.ok:
-            return jsonify({"ok": True})
-        return jsonify({"error": "Failed to unsubscribe"}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True})
 
 @app.route("/email/resubscribe", methods=["POST"])
 def resubscribe_email():
-    email = config.NOTIFY_EMAIL
-    if not email:
-        return jsonify({"error": "No notification email configured"}), 400
-    try:
-        import requests as _requests
-        resp = _requests.post("https://api.bridgebank.app/resubscribe", json={"email": email}, timeout=5)
-        if resp.ok:
-            from .. import email_notify
-            email_notify._unsubscribed_cache.pop(email, None)
-            return jsonify({"ok": True})
-        return jsonify({"error": "Failed to resubscribe"}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True})
 
 @app.route("/setup/sync", methods=["GET", "POST"])
 def setup_sync():
