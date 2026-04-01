@@ -53,11 +53,18 @@ def _make_headers():
 def start_auth(bank_name: str, bank_country: str, psu_type: str = "") -> dict:
     valid_until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 180 * 24 * 3600))
     state_val   = str(uuid.uuid4())
+    redirect_url = config.EB_REDIRECT_URL or (f"{config.BRIDGE_BANK_URL}/callback" if config.BRIDGE_BANK_URL else None)
+    if not redirect_url or not redirect_url.startswith("https://"):
+        raise RuntimeError(
+            "Enable Banking requires an HTTPS redirect URL. "
+            "Set EB_REDIRECT_URL to your public HTTPS callback URL, "
+            "or access Bridge Bank through HTTPS so it is detected automatically."
+        )
     body = {
         "access":       {"valid_until": valid_until},
         "aspsp":        {"name": bank_name, "country": bank_country},
-        "state":        f"bridge-bank-auth|{config.BRIDGE_BANK_URL or "http://localhost:3002"}|{state_val}",
-        "redirect_url": "https://bridgebank.app/callback",
+        "state":        state_val,
+        "redirect_url": redirect_url,
         "psu_type":     psu_type or config.EB_PSU_TYPE,
     }
     db.set_setting("pending_session_state", state_val)

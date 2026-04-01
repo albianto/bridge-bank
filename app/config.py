@@ -24,8 +24,8 @@ SMTP_HOST            = ""
 SMTP_PORT            = "587"
 SMTP_FROM            = ""
 NOTIFY_ON            = "all"
-BRIDGE_BANK_URL      = ""
 NOTIFY_ENABLED       = "false"
+BRIDGE_BANK_URL      = "https://localhost:3000"
 
 def _load():
     """Load config from file, then override with environment variables."""
