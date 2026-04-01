@@ -2,7 +2,7 @@ import logging
 import re
 import threading
 from flask import Flask, render_template, request, redirect, url_for, jsonify
-from .. import config, db, licence, sync
+from .. import config, db, sync
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +42,6 @@ def _detect_container_name():
 CONTAINER_NAME = _detect_container_name()
 IMAGE_NAME = "daalves/bridge-bank:latest"
 
-def _get_bank_account_limit() -> int:
-    try:
-        info = licence.get_activation_info()
-        return max(1, int(info.get("bank_account_limit", 2) or 2))
-    except Exception:
-        return 2
-
 COUNTRIES = [
     ("AT","Austria"),("BE","Belgium"),("HR","Croatia"),("CY","Cyprus"),
     ("CZ","Czech Republic"),("DK","Denmark"),("EE","Estonia"),("FI","Finland"),
@@ -66,35 +59,18 @@ COUNTRIES = [
 @app.route("/")
 def index():
     if not config.is_configured():
-        return redirect(url_for("setup_license"))
+        return redirect(url_for("setup_bank"))
     if not config.is_connected():
         return redirect(url_for("connect"))
     return redirect(url_for("status"))
 
 # ---------------------------------------------------------------------------
-# Setup step 1: License
+# Setup step 1: Enable Banking
 # ---------------------------------------------------------------------------
 
-@app.route("/setup", methods=["GET", "POST"])
-def setup_license():
-    error = None
-    if request.method == "POST":
-        key = request.form.get("license_key", "").strip()
-        result = licence.activate(key)
-        if not result["valid"] and not result.get("offline"):
-            error = result["error"] or "Invalid license key."
-        else:
-            config.set("LICENCE_KEY", key)
-            return redirect(url_for("setup_actual"))
-    return render_template("setup_license.html",
-        error=error,
-        license_key=config.LICENCE_KEY,
-        active="license",
-    )
-
-# ---------------------------------------------------------------------------
-# Setup step 2: Enable Banking
-# ---------------------------------------------------------------------------
+@app.route("/setup")
+def setup_redirect():
+    return redirect(url_for("setup_bank"))
 
 @app.route("/setup/bank", methods=["GET", "POST"])
 def setup_bank():
@@ -438,8 +414,8 @@ def connect():
                 error = "Please select a bank."
             elif not actual_account:
                 error = "Please enter the Actual Budget account name."
-            elif db.get_bank_account_count() >= _get_bank_account_limit():
-                error = "Bank account limit reached. Disconnect a bank or add another slot before connecting a new one."
+            elif db.get_bank_account_count() >= 999:
+                error = "Bank account limit reached."
             else:
                 # Validate that the account exists in Actual Budget
                 try:
@@ -463,11 +439,12 @@ def connect():
                     db.set_setting("pending_bank_country", bank_country)
                     db.set_setting("pending_start_sync_date", start_sync_date)
                     try:
-                        # Update BRIDGE_BANK_URL from current request so the OAuth
-                        # callback redirects back through the same scheme (HTTPS via Caddy)
-                        scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
-                        host   = request.headers.get("X-Forwarded-Host", request.host)
-                        config.set("BRIDGE_BANK_URL", f"{scheme}://{host}")
+                        # Update BRIDGE_BANK_URL from current request unless
+                        # an explicit EB_REDIRECT_URL is configured.
+                        if not config.EB_REDIRECT_URL:
+                            scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+                            host   = request.headers.get("X-Forwarded-Host", request.host)
+                            config.set("BRIDGE_BANK_URL", f"{scheme}://{host}")
                         from .. import enablebanking
                         result   = enablebanking.start_auth(bank_name, bank_country, psu_type=psu_type)
                         auth_url = result["url"]
@@ -487,8 +464,8 @@ def connect():
     success      = request.args.get("success")
     pem_ready    = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
 
-    # Fetch bank account limit from licence API
-    bank_account_limit = _get_bank_account_limit()
+    # Fetch bank account count
+    bank_account_limit = 999
 
     return render_template("connect.html",
         error=error,
@@ -499,7 +476,6 @@ def connect():
         pem_ready=pem_ready,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         bank_account_limit=bank_account_limit,
-        bank_slot_url=f"https://buy.stripe.com/00waEQ6subzF0PZ9EBcMM05?client_reference_id={config.LICENCE_KEY}",
         today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )
@@ -527,7 +503,7 @@ def reauthorise():
         return redirect(url_for("connect") + f"?error=Could not start re-authorisation: {e}")
 
     all_accounts = db.get_all_bank_accounts()
-    bank_account_limit = _get_bank_account_limit()
+    bank_account_limit = 999
 
     return render_template("connect.html",
         error=None,
@@ -537,7 +513,6 @@ def reauthorise():
         pem_ready=True,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         bank_account_limit=bank_account_limit,
-        bank_slot_url=f"https://buy.stripe.com/00waEQ6subzF0PZ9EBcMM05?client_reference_id={config.LICENCE_KEY}",
         today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )
@@ -560,8 +535,6 @@ def _save_bank_account(session_id, account_uid, valid_until):
         db.update_bank_account_field(account_id, "bank_name", bank_name)
         db.update_bank_account_field(account_id, "bank_country", bank_country)
     else:
-        if db.get_bank_account_count() >= _get_bank_account_limit():
-            raise ValueError("Bank account limit reached. Disconnect a bank or add another slot before connecting a new one.")
         db.add_bank_account(
             session_id=session_id,
             account_uid=account_uid,
@@ -610,7 +583,7 @@ def callback():
             return redirect(url_for("connect") + "?error=Your bank did not return any accounts. This may happen if you declined account access during authorisation, or if the selected account type is not supported by your bank through open banking. Please try again and make sure to approve access to at least one account.")
     except Exception as e:
         logger.error("Callback failed: %s", e)
-        return redirect(url_for("connect") + "?error=Bank connection failed: " + str(e) + ". If this keeps happening, please download your logs from the Status page and send them to support@bridgebank.app.")
+        return redirect(url_for("connect") + "?error=Bank connection failed: " + str(e) + ". If this keeps happening, please download your logs from the Status page.")
 
 @app.route("/pick-account")
 def pick_account():
@@ -643,7 +616,7 @@ def pick_account_post():
 @app.route("/status")
 def status():
     if not config.is_configured():
-        return redirect(url_for("setup_license"))
+        return redirect(url_for("setup_bank"))
     if not config.is_connected():
         return redirect(url_for("connect"))
 
@@ -653,12 +626,6 @@ def status():
     all_accounts = db.get_all_bank_accounts()
     days_left    = _get_days_left()
     last_sync    = db.get_last_sync()
-    act_info     = licence.get_activation_info()
-
-    license_sync_failed = False
-    val = licence.validate()
-    if not val.get("valid") and not val.get("offline"):
-        license_sync_failed = True
 
     # Fun stats
     import random
@@ -706,7 +673,7 @@ def status():
 
     # Review prompt logic
     show_review_prompt = False
-    if not act_info.get("is_trial", False) and not db.get_setting("review_dismissed") and not db.get_setting("review_submitted"):
+    if not db.get_setting("review_dismissed") and not db.get_setting("review_submitted"):
         first_sync = db.get_first_sync_date()
         if first_sync:
             try:
@@ -726,21 +693,13 @@ def status():
         sync_frequency=getattr(config, 'SYNC_FREQUENCY', '24') or '24',
         sync_times=_get_sync_times(),
         notify_email=config.NOTIFY_EMAIL,
-        activation_usage=act_info["usage"],
-        activation_limit=act_info["limit"],
-        is_trial=act_info.get("is_trial", False),
-        trial_expires_at=act_info.get("expires_at", "")[:10] if act_info.get("expires_at") else None,
-        license_sync_failed=license_sync_failed,
-        license_limit_reached=(license_sync_failed and act_info["usage"] >= act_info["limit"] and act_info["limit"] > 0),
         page=log_data["page"],
         total_pages=log_data["total_pages"],
         active="status",
-        update_available=db.get_setting("update_available") == "1",
         total_tx=total_tx,
         streak=streak,
         fun_message=fun_message,
         show_review_prompt=show_review_prompt,
-        license_key=config.LICENCE_KEY,
     )
 
 # ---------------------------------------------------------------------------
@@ -750,14 +709,6 @@ def status():
 @app.route("/sync/clear", methods=["POST"])
 def clear_sync_log():
     db.clear_sync_log()
-    return redirect(url_for("status"))
-
-@app.route("/settings/deactivate", methods=["POST"])
-def deactivate_license():
-    result = licence.deactivate()
-    if result["success"]:
-        config.set("LICENCE_KEY", "")
-        return redirect(url_for("setup_license"))
     return redirect(url_for("status"))
 
 # ---------------------------------------------------------------------------
@@ -794,29 +745,11 @@ def review_dismiss():
 
 @app.route("/review/submit", methods=["POST"])
 def review_submit():
-    import requests as _requests
     rating = request.form.get("rating", "").strip()
     review_text = request.form.get("review", "").strip()
-    name = request.form.get("name", "").strip()
-    key = config.LICENCE_KEY
-    if not rating or not review_text or not key:
+    if not rating or not review_text:
         return redirect(url_for("status"))
-    try:
-        resp = _requests.post("https://api.bridgebank.app/review", json={
-            "license_key": key,
-            "name": name or None,
-            "rating": int(rating),
-            "review": review_text,
-        }, timeout=10)
-        if resp.status_code in (200, 201):
-            db.set_setting("review_submitted", "1")
-        else:
-            logger.warning("Review submit failed: %s %s", resp.status_code, resp.text)
-            # Still mark as submitted to avoid nagging on API errors
-            db.set_setting("review_submitted", "1")
-    except Exception as e:
-        logger.error("Review submit error: %s", e)
-        db.set_setting("review_submitted", "1")
+    db.set_setting("review_submitted", "1")
     return redirect(url_for("status"))
 
 
@@ -999,11 +932,15 @@ def banks():
         try:
             from .. import enablebanking
             _banks_cache = enablebanking.get_banks()
-        except Exception as e:
-            logger.error("Failed to fetch banks: %s", e)
-            resp = jsonify([])
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            return resp
+        except Exception:
+            try:
+                from .. import enablebanking
+                _banks_cache = enablebanking.get_banks_public()
+            except Exception as e:
+                logger.error("Failed to fetch banks: %s", e)
+                resp = jsonify([])
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return resp
     resp = jsonify(_banks_cache)
     resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp

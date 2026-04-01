@@ -10,7 +10,7 @@ Bridge Bank connects to your EU bank via open banking and imports your transacti
 
 - **Flexible sync frequency** — sync every 6, 12, or 24 hours, at a time you choose
 - **2,500+ European banks** — Revolut, N26, Monzo, Wise, Millennium BCP, Santander, ING, BNP Paribas, and more across 29 countries
-- **Multiple bank accounts** — connect up to 2 bank accounts by default, each syncing to a different Actual Budget account. Need more? Purchase additional slots from the status page.
+- **Multiple bank accounts** — connect multiple bank accounts, each syncing to a different Actual Budget account
 - **Read-only, always** — Bridge Bank can never move money or modify your account
 - **Pending transaction tracking** — pending transactions are imported as uncleared and automatically confirmed when they settle
 - **Duplicate detection** — Bridge Bank tracks every transaction ID so nothing gets imported twice
@@ -26,20 +26,13 @@ Bridge Bank connects to your EU bank via open banking and imports your transacti
 - Docker and Docker Compose (runs on x86, Raspberry Pi, and other ARM devices)
 - A free [Enable Banking](https://enablebanking.com/) account
 - A self-hosted [Actual Budget](https://actualbudget.org/) instance
-- A Bridge Bank licence key — [buy one at bridgebank.app](https://bridgebank.app)
 
 ---
 
 ## Quick start
 
-> **New to self-hosting?** Follow the step-by-step guide at [bridgebank.app/getting-started](https://bridgebank.app/getting-started.html) — it walks you through everything from Enable Banking setup to running your first sync.
 
-
-### 1. Get your licence key
-
-Purchase at [bridgebank.app](https://bridgebank.app). Your key is delivered to your email instantly.
-
-### 2. Set up Enable Banking
+### 1. Set up Enable Banking
 
 Enable Banking is the regulated open banking provider that connects Bridge Bank to your bank.
 
@@ -47,17 +40,17 @@ Enable Banking is the regulated open banking provider that connects Bridge Bank 
 2. Go to **API applications** and click **Register new application**
 3. Fill in the form:
    - **Application name:** Bridge Bank
-   - **Allowed redirect URLs:** `https://bridgebank.app/callback`
+   - **Allowed redirect URLs:** your Bridge Bank instance URL + `/callback` (e.g. `http://your-server:3002/callback`)
    - **Application description:** Connect Actual Budget with my bank
    - **Email for data protection matters:** your email address
-   - **Privacy URL:** `https://bridgebank.app/privacy`
-   - **Terms URL:** `https://bridgebank.app/terms`
+   - **Privacy URL:** (your own or leave blank)
+   - **Terms URL:** (your own or leave blank)
 4. Click **Register** — a `.pem` file will be saved to your Downloads folder. The filename matches your Application ID (e.g. `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pem`). Keep it safe — you'll need it in the setup wizard.
 5. Click **Activate by linking accounts** on your application page
 6. Select your country and bank from the dropdowns and click **Link**
 7. Follow the steps to log in to your bank and approve read-only access — this activates your Enable Banking app
 
-### 3. Install Bridge Bank
+### 2. Install Bridge Bank
 
 **On your server**, create the folder and download the compose file:
 ```bash
@@ -76,16 +69,15 @@ Open **http://your-server-address:3002** in your browser. The setup wizard will 
 
 ## Setup wizard
 
-The browser-based wizard walks you through five steps:
+The browser-based wizard walks you through four steps:
 
-1. **License** — enter your key to activate Bridge Bank on this machine
+1. **Enable Banking** — enter your Application ID and upload your `.pem` file
 2. **Actual Budget** — enter your Actual Budget URL, password, and Sync ID
 3. **Notifications** — set your email and SMTP credentials
-4. **Sync** — choose your sync frequency (every 6, 12, or 24 hours) and start date
-5. **Bank** — upload your Enable Banking `.pem` file (App ID is filled automatically from the filename), then connect your bank via OAuth. You choose which Actual Budget account each bank syncs to.
-6. **Status** — view sync history, manage bank connections, check for updates
+4. **Bank** — connect your bank via OAuth. You choose which Actual Budget account each bank syncs to.
+5. **Status** — view sync history, manage bank connections, check for updates
 
-You can connect up to 2 bank accounts by default. Each bank syncs to a different Actual Budget account (e.g. Revolut → "Revolut", N26 → "N26"). To add a second bank, go to the **Bank** tab and search for another bank.
+You can connect multiple bank accounts. Each bank syncs to a different Actual Budget account (e.g. Revolut → "Revolut", N26 → "N26"). To add another bank, go to the **Bank** tab and search for another bank.
 
 Once complete, Bridge Bank runs silently in the background and syncs your transactions every day at the time you chose.
 
@@ -112,8 +104,7 @@ Your inbox  ← alert emails
 
 On each sync run, Bridge Bank:
 
-1. Validates your licence key
-2. Fetches transactions since the last sync from Enable Banking
+1. Fetches transactions since the last sync from Enable Banking
 3. Filters out any transaction IDs already imported
 4. Writes new transactions to Actual Budget
 5. Updates any previously pending transactions that have since settled

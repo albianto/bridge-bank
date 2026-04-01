@@ -4,7 +4,6 @@
 <div class="steps">
   <div class="step done"></div>
   <div class="step done"></div>
-  <div class="step done"></div>
   <div class="step {% if all_accounts %}done{% else %}active{% endif %}"></div>
   <div class="step"></div>
 </div>
@@ -21,7 +20,7 @@
 {% if not pem_ready and not auth_url %}
   <div class="card">
     <div class="card-title">Upload your private key</div>
-    <div class="card-sub">Step 4 of 5 — upload your Enable Banking private key file before connecting your bank.</div>
+    <div class="card-sub">Step 3 of 4 — upload your Enable Banking private key file before connecting your bank.</div>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="upload_pem">
       <label style="margin-top:0;">Private key file (.pem)</label>
@@ -47,7 +46,7 @@
 {% elif pem_ready and not auth_url %}
   <div class="card">
     <div class="card-title">Connect your bank</div>
-    <div class="card-sub">Step 4 of 5 — search for your bank and authorise read-only access.</div>
+    <div class="card-sub">Step 3 of 4 — search for your bank and authorise read-only access.</div>
 
     <div style="margin-bottom:1rem;padding:10px 14px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px;">
       <span>&#10003;</span> Private key loaded. <a href="/connect/reset-pem" style="color:#94a3b8;font-size:12px;margin-left:auto;">Replace</a>
@@ -97,11 +96,6 @@
     <hr style="border:none;border-top:1px solid #253450;margin:1.25rem 0;">
     {% endif %}
 
-    {% if all_accounts|length >= bank_account_limit %}
-    <div style="padding:14px;background:#080b12;border:1px solid #253450;border-radius:8px;font-size:13px;color:#94a3b8;text-align:center;">
-      Bank account limit reached. <a href="{{ bank_slot_url }}" target="_blank" style="color:#e8edf5;font-weight:600;">Add 1 more &rarr;</a>
-    </div>
-    {% else %}
     <form method="POST" id="connect-form">
       <input type="hidden" name="action" value="start">
       <input type="hidden" id="inp-bank-name" name="bank_name">
@@ -130,7 +124,6 @@
       <div class="field-hint">2,500+ banks across 29 European countries.</div>
       <button class="btn btn-primary" type="submit" id="connect-btn" disabled style="background:var(--surface2); opacity:0.5;">Add bank &rarr;</button>
     </form>
-    {% endif %}
   </div>
 
 {% elif auth_url %}

@@ -18,7 +18,7 @@
     {% block content %}{% endblock %}
     {% block nav %}
     <nav class="footer-nav">
-      <a href="/setup" {% if active == 'license' %}class="active"{% endif %}>License</a>
+      <a href="/setup/bank" {% if active == 'bank' %}class="active"{% endif %}>Bank Setup</a>
       <a href="/setup/actual" {% if active == 'actual' %}class="active"{% endif %}>Actual Budget</a>
       <a href="/setup/notifications" {% if active == 'notifications' %}class="active"{% endif %}>Notifications</a>
       <a href="/connect" {% if active == 'connect' %}class="active"{% endif %}>Bank</a>
@@ -29,8 +29,6 @@
   <footer class="app-footer" style="justify-content:space-between;">
     <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
       <a href="mailto:support@david-alves.com">Support</a>
-      <a href="https://bridgebank.app/privacy" target="_blank">Privacy</a>
-      <a href="https://bridgebank.app/terms" target="_blank">Terms</a>
       <a href="https://github.com/DAdjadj/bridge-bank" target="_blank">GitHub</a>
     </div>
     <span style="color:#333;font-size:12px;">v{{ app_version }}</span>
