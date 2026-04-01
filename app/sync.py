@@ -235,8 +235,10 @@ def _sync_account(account, state):
         from actual import Actual
         from actual.queries import get_or_create_account, reconcile_transaction, get_transactions, create_transaction
 
+        _cert = False if config.ACTUAL_VERIFY_SSL.lower() in ("false", "0", "no") else None
+
         with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
-                    file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
+                    file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache", cert=_cert) as actual:
             account_obj    = get_or_create_account(actual.session, actual_account_name)
             existing       = list(get_transactions(actual.session, account=account_obj))
             already_matched = existing[:]

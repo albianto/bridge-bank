@@ -6,6 +6,12 @@ from .. import config, db, sync
 
 logger = logging.getLogger(__name__)
 
+def _actual_ssl_cert():
+    """Return the cert parameter for Actual(): False to skip SSL verification, None otherwise."""
+    if config.ACTUAL_VERIFY_SSL.lower() in ("false", "0", "no"):
+        return False
+    return None
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 def _get_secret_key():
     stored = db.get_setting("flask_secret_key")
@@ -122,7 +128,7 @@ def setup_actual():
             # Validate connection before saving
             try:
                 from actual import Actual
-                with Actual(base_url=url, password=password, file=sync_id, data_dir="/data/actual-cache"):
+                with Actual(base_url=url, password=password, file=sync_id, data_dir="/data/actual-cache", cert=_actual_ssl_cert()):
                     pass
             except ConnectionError:
                 error = f"Could not reach Actual Budget at {url}. Make sure the URL is correct and Actual Budget is running."
@@ -340,7 +346,7 @@ def actual_accounts_api():
         from actual import Actual
         from actual.queries import get_accounts
         with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
-                    file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
+                    file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache", cert=_actual_ssl_cert()) as actual:
             accounts = get_accounts(actual.session)
             return jsonify([a.name for a in accounts])
     except Exception as e:
@@ -394,7 +400,7 @@ def connect():
                     from actual import Actual
                     from actual.queries import get_accounts
                     with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
-                                file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
+                                file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache", cert=_actual_ssl_cert()) as actual:
                         actual_names = [a.name for a in get_accounts(actual.session)]
                     if actual_account not in actual_names:
                         close_matches = [n for n in actual_names if actual_account.lower() in n.lower() or n.lower() in actual_account.lower()]
