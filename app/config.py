@@ -7,6 +7,7 @@ HA_OPTIONS_FILE = "/data/options.json"
 # Defaults — all overridable by HA add-on options, config.json, or environment variables
 ACTUAL_URL           = ""
 ACTUAL_PASSWORD      = ""
+ACTUAL_ENCRYPTION_PASSWORD = ""
 ACTUAL_SYNC_ID       = ""
 ACTUAL_ACCOUNT       = ""
 ACTUAL_VERIFY_SSL    = "false"
