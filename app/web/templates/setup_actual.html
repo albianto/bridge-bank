@@ -25,6 +25,12 @@
       <input type="password" id="actual_password" name="actual_password" value="{{ actual_password }}" placeholder="Your Actual Budget password" required>
       <button type="button" class="toggle-pw" onclick="togglePw()" id="pw-btn">Show</button>
     </div>
+    <label for="actual_encryption_password">Encryption password <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+    <div class="input-wrap">
+      <input type="password" id="actual_encryption_password" name="actual_encryption_password" value="{{ actual_encryption_password }}" placeholder="Leave blank if E2E encryption is off">
+      <button type="button" class="toggle-pw" onclick="toggleEPw()" id="epw-btn">Show</button>
+    </div>
+    <div class="field-hint">Only needed if you have end-to-end encryption enabled in Actual Budget.</div>
     <label for="actual_sync_id">Sync ID</label>
     <input type="text" id="actual_sync_id" name="actual_sync_id" value="{{ actual_sync_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" required>
     <div class="field-hint">Settings &rarr; Show advanced settings &rarr; Sync ID inside Actual Budget.</div>
@@ -39,6 +45,12 @@
 function togglePw() {
   const f = document.getElementById('actual_password');
   const b = document.getElementById('pw-btn');
+  if (f.type === 'password') { f.type = 'text'; b.textContent = 'Hide'; }
+  else { f.type = 'password'; b.textContent = 'Show'; }
+}
+function toggleEPw() {
+  const f = document.getElementById('actual_encryption_password');
+  const b = document.getElementById('epw-btn');
   if (f.type === 'password') { f.type = 'text'; b.textContent = 'Hide'; }
   else { f.type = 'password'; b.textContent = 'Show'; }
 }

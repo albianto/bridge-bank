@@ -136,17 +136,18 @@ def setup_bank():
 def setup_actual():
     error = None
     if request.method == "POST":
-        url      = request.form.get("actual_url", "").strip().rstrip("/")
-        password = request.form.get("actual_password", "").strip()
-        sync_id  = request.form.get("actual_sync_id", "").strip()
-        account  = request.form.get("actual_account", "").strip()
+        url         = request.form.get("actual_url", "").strip().rstrip("/")
+        password    = request.form.get("actual_password", "").strip()
+        enc_password = request.form.get("actual_encryption_password", "").strip() or None
+        sync_id     = request.form.get("actual_sync_id", "").strip()
+        account     = request.form.get("actual_account", "").strip()
         if not url or not password or not sync_id or not account:
             error = "All fields are required."
         else:
             # Validate connection before saving
             try:
                 from actual import Actual
-                with Actual(base_url=url, password=password, file=sync_id, data_dir="/data/actual-cache"):
+                with Actual(base_url=url, password=password, encryption_password=enc_password, file=sync_id, data_dir="/data/actual-cache"):
                     pass
             except ConnectionError:
                 error = f"Could not reach Actual Budget at {url}. Make sure the URL is correct and Actual Budget is running."
@@ -161,6 +162,7 @@ def setup_actual():
             if not error:
                 config.set("ACTUAL_URL", url)
                 config.set("ACTUAL_PASSWORD", password)
+                config.set("ACTUAL_ENCRYPTION_PASSWORD", enc_password or "")
                 config.set("ACTUAL_SYNC_ID", sync_id)
                 config.set("ACTUAL_ACCOUNT", account)
                 return redirect(url_for("setup_notifications"))
@@ -168,6 +170,7 @@ def setup_actual():
         error=error,
         actual_url=config.ACTUAL_URL,
         actual_password=config.ACTUAL_PASSWORD,
+        actual_encryption_password=config.ACTUAL_ENCRYPTION_PASSWORD,
         actual_sync_id=config.ACTUAL_SYNC_ID,
         actual_account=config.ACTUAL_ACCOUNT,
         active="actual",
@@ -392,6 +395,7 @@ def actual_accounts_api():
         from actual import Actual
         from actual.queries import get_accounts
         with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
+                    encryption_password=config.ACTUAL_ENCRYPTION_PASSWORD or None,
                     file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
             accounts = get_accounts(actual.session)
             return jsonify([a.name for a in accounts])
@@ -446,6 +450,7 @@ def connect():
                     from actual import Actual
                     from actual.queries import get_accounts
                     with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
+                                encryption_password=config.ACTUAL_ENCRYPTION_PASSWORD or None,
                                 file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
                         actual_names = [a.name for a in get_accounts(actual.session)]
                     if actual_account not in actual_names:

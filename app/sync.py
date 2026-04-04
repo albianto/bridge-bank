@@ -236,6 +236,7 @@ def _sync_account(account, state):
         from actual.queries import get_or_create_account, reconcile_transaction, get_transactions, create_transaction
 
         with Actual(base_url=config.ACTUAL_URL, password=config.ACTUAL_PASSWORD,
+                    encryption_password=config.ACTUAL_ENCRYPTION_PASSWORD or None,
                     file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
             account_obj    = get_or_create_account(actual.session, actual_account_name)
             existing       = list(get_transactions(actual.session, account=account_obj))
