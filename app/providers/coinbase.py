@@ -14,8 +14,11 @@ class CoinbaseProvider(BalanceProvider):
     name = "coinbase"
     display_name = "Coinbase"
     credential_fields = [
-        {"key": "api_key_name", "label": "API Key Name", "type": "text"},
-        {"key": "private_key", "label": "Private Key (PEM)", "type": "password"},
+        {"key": "api_key_name", "label": "API Key Name", "type": "text",
+         "help": "Go to Coinbase Developer Platform \u2192 API Keys \u2192 Create API Key. The key name looks like 'organizations/xxx/apiKeys/xxx'.",
+         "help_url": "https://portal.cdp.coinbase.com/access/api"},
+        {"key": "private_key", "label": "Private Key (PEM)", "type": "password",
+         "help": "The EC private key shown when you create the API key. Starts with '-----BEGIN EC PRIVATE KEY-----'."},
     ]
 
     def _make_jwt(self, credentials: dict) -> str:

@@ -327,6 +327,16 @@
       input.addEventListener('input', checkProviderReady);
       container.appendChild(label);
       container.appendChild(input);
+      if (field.help) {
+        var hint = document.createElement('div');
+        hint.className = 'field-hint';
+        var text = field.help;
+        if (field.help_url) {
+          text += ' <a href="' + field.help_url + '" target="_blank" style="color:#6ee7b7;">Get your key &rarr;</a>';
+        }
+        hint.innerHTML = text;
+        container.appendChild(hint);
+      }
     });
     checkProviderReady();
   }

@@ -19,8 +19,11 @@ class BinanceProvider(BalanceProvider):
     name = "binance"
     display_name = "Binance"
     credential_fields = [
-        {"key": "api_key", "label": "API Key", "type": "password"},
-        {"key": "api_secret", "label": "API Secret", "type": "password"},
+        {"key": "api_key", "label": "API Key", "type": "password",
+         "help": "Go to Binance \u2192 Account \u2192 API Management \u2192 Create API. Enable 'Read' only (no trading/withdrawal).",
+         "help_url": "https://www.binance.com/en/my/settings/api-management"},
+        {"key": "api_secret", "label": "API Secret", "type": "password",
+         "help": "Shown once when you create the API key. Copy it before closing the dialog."},
     ]
 
     def _headers(self, credentials: dict) -> dict:
