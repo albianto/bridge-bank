@@ -216,8 +216,9 @@ def _sync_balance_account(account):
                     file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
             account_obj = get_or_create_account(actual.session, actual_name)
             target_cents = int(target_balance * 100)
-            current_balance = int(account_obj.balance or 0)
-            adjustment = target_cents - current_balance
+            # acc.balance is in euros (e.g. 73.00), convert to cents for comparison
+            current_cents = int((account_obj.balance or 0) * 100)
+            adjustment = target_cents - current_cents
             balance_note = f"{provider.display_name} portfolio value"
 
             # Find existing balance-update transaction and update its amount,
@@ -234,7 +235,7 @@ def _sync_balance_account(account):
             tx_count = 0
             if found:
                 # Recalculate: current balance WITHOUT this transaction + new amount = target
-                balance_without = current_balance - int(found.amount or 0)
+                balance_without = current_cents - int(found.amount or 0)
                 new_amount = target_cents - balance_without
                 if new_amount != int(found.amount or 0):
                     found.amount = new_amount
@@ -247,14 +248,14 @@ def _sync_balance_account(account):
                     account_obj,
                     f"{provider.display_name}",
                     balance_note,
-                    adjustment,
+                    amount=adjustment,
                     cleared=True,
                 )
                 tx_count = 1
 
             actual.commit()
             log.info("Balance sync %s: target=%s current=%s adjustment=%s",
-                     bank_label, target_cents, current_balance, adjustment)
+                     bank_label, target_cents, current_cents, adjustment)
 
     except Exception as e:
         msg = f"{bank_label}: Could not connect to Actual Budget: {e}"
@@ -355,7 +356,7 @@ def _sync_account(account, state):
                             except Exception:
                                 t = create_transaction(
                                     actual.session, date, account_obj, payee, notes,
-                                    amount, cleared=False, imported_payee=payee
+                                    amount=amount, cleared=False, imported_payee=payee
                                 )
                             already_matched.append(t)
                             if t.changed():
@@ -392,7 +393,7 @@ def _sync_account(account, state):
                             except Exception:
                                 t = create_transaction(
                                     actual.session, date, account_obj, payee, notes,
-                                    amount, cleared=True, imported_payee=payee
+                                    amount=amount, cleared=True, imported_payee=payee
                                 )
                             already_matched.append(t)
                             if t.changed():
