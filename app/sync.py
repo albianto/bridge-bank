@@ -217,15 +217,14 @@ def _sync_balance_account(account):
             account_obj = get_or_create_account(actual.session, actual_name)
             target_cents = int(target_balance * 100)
 
-            # Find existing balance transactions from this provider and delete them
-            # so we can set a single clean transaction for the current value
+            # Delete all previous balance transactions for this provider,
+            # then create a single fresh one with the current value
             existing = list(get_transactions(actual.session, account=account_obj))
             balance_note = f"{provider.display_name} portfolio value"
             for txn in existing:
                 if txn.notes == balance_note:
-                    actual.session.delete(txn)
+                    txn.delete()
 
-            # Create a single transaction for the full portfolio value
             tx_count = 0
             if target_cents != 0:
                 create_transaction(
