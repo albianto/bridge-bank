@@ -168,6 +168,8 @@
       <input type="text" name="actual_account" id="provider-actual-account" placeholder="e.g. eToro" required oninput="checkProviderReady()">
       <div class="field-hint">The name of the account in Actual Budget where the balance will be tracked.</div>
 
+      <div class="alert alert-info" style="margin-top:1rem;">Balance is synced in your account currency. For providers that report in USD, the amount is converted to EUR using the ECB exchange rate. The displayed value may differ slightly (~1-2%) from your provider's total due to exchange rate spreads.</div>
+
       <button class="btn btn-primary" type="submit" id="provider-connect-btn" disabled style="background:var(--surface2); opacity:0.5;">Connect provider &rarr;</button>
     </form>
     </div>
