@@ -12,7 +12,7 @@ services:
       - "3002:3000"
 
   watchtower:
-    image: containrrr/watchtower
+    image: nickfedor/watchtower
     container_name: bridge-bank-watchtower
     restart: unless-stopped
     volumes:
