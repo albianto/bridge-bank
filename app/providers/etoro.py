@@ -50,12 +50,13 @@ class EtoroProvider(BalanceProvider):
         resp.raise_for_status()
         data = resp.json()
         portfolio = data.get("clientPortfolio", {})
-        # Total equity = available credit + unrealized PnL + sum of position values
+        # Total equity = available cash + current value of all open positions
         credit = Decimal(str(portfolio.get("credit", 0)))
-        unrealized_pnl = Decimal(str(portfolio.get("unrealizedPnL", 0)))
-        # credit already includes cash not in positions; unrealizedPnL is the
-        # floating profit/loss on open positions. Together they represent total equity.
-        return credit + unrealized_pnl
+        positions = portfolio.get("positions", [])
+        position_value = sum(
+            Decimal(str(p.get("unitsBaseValueDollars", 0))) for p in positions
+        )
+        return credit + position_value
 
     def get_currency(self, credentials: dict) -> str:
         return "USD"
