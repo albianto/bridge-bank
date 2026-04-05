@@ -215,7 +215,7 @@ def _sync_balance_account(account):
                     encryption_password=config.ACTUAL_ENCRYPTION_PASSWORD or None,
                     file=config.ACTUAL_SYNC_ID, data_dir="/data/actual-cache") as actual:
             account_obj = get_or_create_account(actual.session, actual_name)
-            current_balance = account_obj.balance or 0
+            current_balance = int(account_obj.balance or 0)
             # actualpy stores amounts in cents (minor units)
             target_cents = int(target_balance * 100)
             adjustment = target_cents - current_balance

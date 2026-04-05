@@ -14,10 +14,10 @@ class EtoroProvider(BalanceProvider):
     display_name = "eToro"
     credential_fields = [
         {"key": "api_key", "label": "Public API Key", "type": "password",
-         "help": "Go to Settings \u2192 Trading \u2192 API Key Management. Copy your Public API Key.",
+         "help": "Your eToro account must be verified first. Then go to Settings \u2192 Trading \u2192 API Key Management and copy your Public API Key.",
          "help_url": "https://www.etoro.com/settings/trade"},
         {"key": "user_key", "label": "User Key", "type": "password",
-         "help": "Generate a User Key with 'Read' permission for your Real account. Requires SMS verification."},
+         "help": "In the same API Key Management page, generate a User Key with 'Read' permission for your Real account. Requires SMS verification."},
     ]
 
     def _headers(self, credentials: dict) -> dict:
