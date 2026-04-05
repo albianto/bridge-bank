@@ -82,122 +82,133 @@
 </script>
 {% endif %}
 
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
-    <div>
-      <div class="card-title" style="margin-bottom:0.25rem;">Status</div>
-      <div class="card-sub" style="margin-bottom:0;">{{ fun_message }}</div>
+<div class="status-layout">
+  <div class="status-main">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
+        <div>
+          <div class="card-title" style="margin-bottom:0.25rem;">Status</div>
+          <div class="card-sub" style="margin-bottom:0;">{{ fun_message }}</div>
+        </div>
+        <button class="btn btn-ghost" id="sync-btn" onclick="runSync()">Sync now</button>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Last sync</span>
+        <span class="stat-value utc-time">{{ last_sync or 'Never' }}</span>
+      </div>
+      <div class="stat-row"><span class="stat-label">Notifications</span><span class="stat-value">{{ notify_email or 'Disabled' }}</span></div>
+      {% if total_tx >= 0 %}
+      <div class="stat-row"><span class="stat-label">Transactions synced</span><span class="stat-value">{{ total_tx }}</span></div>
+      {% endif %}
+      {% if streak > 0 %}
+      <div class="stat-row"><span class="stat-label">Sync streak</span><span class="stat-value">{{ streak }} in a row</span></div>
+      {% endif %}
     </div>
-    <button class="btn btn-ghost" id="sync-btn" onclick="runSync()">Sync now</button>
-  </div>
-  <div class="stat-row">
-    <span class="stat-label">Last sync</span>
-    <span class="stat-value utc-time">{{ last_sync or 'Never' }}</span>
-  </div>
-  <div class="stat-row"><span class="stat-label">Notifications</span><span class="stat-value">{{ notify_email or 'Disabled' }}</span></div>
-  {% if total_tx >= 0 %}
-  <div class="stat-row"><span class="stat-label">Transactions synced</span><span class="stat-value">{{ total_tx }}</span></div>
-  {% endif %}
-  {% if streak > 0 %}
-  <div class="stat-row"><span class="stat-label">Sync streak</span><span class="stat-value">{{ streak }} in a row</span></div>
-  {% endif %}
-</div>
 
-<div class="card">
-  <div class="card-title" style="font-size:15px; margin-bottom:0.75rem;">Sync schedule</div>
-  <form method="POST" action="/setup/sync" id="sync-form">
-    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-      <div id="freq-wrap">
-        <label for="sync_frequency" style="margin-top:0;font-size:11px;">Frequency</label>
-        <select id="sync_frequency" name="sync_frequency" style="margin-bottom:0;box-sizing:border-box;height:40px;" onchange="toggleStartTime()">
-          <option value="0" {% if sync_frequency == "0" %}selected{% endif %}>Manual only</option>
-          <option value="6" {% if sync_frequency == "6" %}selected{% endif %}>Every 6 hours</option>
-          <option value="12" {% if sync_frequency == "12" %}selected{% endif %}>Every 12 hours</option>
-          <option value="24" {% if sync_frequency == "24" %}selected{% endif %}>Every 24 hours</option>
-        </select>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <div class="card-title" style="font-size:15px;margin-bottom:0;">Sync log</div>
+        <form method="POST" action="/sync/clear" onsubmit="return confirm('Clear all sync logs?');">
+          <button type="submit" class="btn btn-ghost" style="font-size:12px;">Clear log</button>
+        </form>
       </div>
-      <div id="start-time-wrap" {% if sync_frequency == "0" %}hidden{% endif %}>
-        <label for="sync_time" style="margin-top:0;font-size:11px;">Start time</label>
-        <input type="text" id="sync_time" name="sync_time" value="{{ sync_time }}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" maxlength="5" style="margin-bottom:0;box-sizing:border-box;height:40px;width:5.5em;text-align:center;">
-      </div>
-      <button class="btn btn-ghost" type="submit" style="font-size:12px;">Save</button>
+      {% if syncs %}
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Transactions</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in syncs %}
+            <tr>
+              <td class="utc-time">{{ s.ran_at }}</td>
+              <td><span class="badge {% if s.status == 'success' %}badge-success{% else %}badge-fail{% endif %}">{{ s.status }}</span></td>
+              <td>{{ s.tx_count }}</td>
+              <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="var a=this.querySelector('.expand-arrow');if(this.style.whiteSpace==='normal'){this.style.whiteSpace='nowrap';a.textContent='\u25B8'}else{this.style.whiteSpace='normal';a.textContent='\u25BE'}"><span class="expand-arrow" style="font-size:10px;margin-right:4px;color:#4a5568;">&blacktriangleright;</span>{{ s.message or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if total_pages > 1 %}
+        <div style="display:flex;justify-content:center;align-items:center;gap:0.5rem;margin-top:1rem;">
+          {% if page > 1 %}<a href="?page={{ page - 1 }}" class="btn btn-ghost" style="font-size:12px;padding:4px 12px;">&larr;</a>{% endif %}
+          <span style="font-size:12px;color:#4a5568;">{{ page }} / {{ total_pages }}</span>
+          {% if page < total_pages %}<a href="?page={{ page + 1 }}" class="btn btn-ghost" style="font-size:12px;padding:4px 12px;">&rarr;</a>{% endif %}
+        </div>
+        {% endif %}
+      {% else %}
+        <div style="color:#4a5568;font-size:13px;text-align:center;padding:2rem 0;line-height:1.6;">No syncs yet.<br>Click "Sync now" above or wait for the scheduled sync.</div>
+      {% endif %}
     </div>
-    <div style="font-size:12px;color:#94a3b8;margin-top:8px;" id="sync-times-preview">{% if sync_frequency != "0" %}Syncs at {{ sync_times }}{% endif %}</div>
-  </form>
-  <script>
+  </div>
+
+  <div class="status-side">
+    <div class="card">
+      <div class="card-title" style="font-size:15px; margin-bottom:0.75rem;">Sync schedule</div>
+      <form method="POST" action="/setup/sync" id="sync-form">
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div id="freq-wrap">
+            <label for="sync_frequency" style="margin-top:0;font-size:11px;">Frequency</label>
+            <select id="sync_frequency" name="sync_frequency" style="margin-bottom:0;box-sizing:border-box;height:40px;" onchange="toggleStartTime()">
+              <option value="0" {% if sync_frequency == "0" %}selected{% endif %}>Manual only</option>
+              <option value="6" {% if sync_frequency == "6" %}selected{% endif %}>Every 6 hours</option>
+              <option value="12" {% if sync_frequency == "12" %}selected{% endif %}>Every 12 hours</option>
+              <option value="24" {% if sync_frequency == "24" %}selected{% endif %}>Every 24 hours</option>
+            </select>
+          </div>
+          <div id="start-time-wrap" {% if sync_frequency == "0" %}hidden{% endif %}>
+            <label for="sync_time" style="margin-top:0;font-size:11px;">Start time</label>
+            <input type="text" id="sync_time" name="sync_time" value="{{ sync_time }}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" maxlength="5" style="margin-bottom:0;box-sizing:border-box;height:40px;width:5.5em;text-align:center;">
+          </div>
+          <button class="btn btn-ghost" type="submit" style="font-size:12px;">Save</button>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:8px;" id="sync-times-preview">{% if sync_frequency != "0" %}Syncs at {{ sync_times }}{% endif %}</div>
+      </form>
+      <script>
   function updateSyncPreview() {
     var freq = parseInt(document.getElementById('sync_frequency').value);
     var wrap = document.getElementById('start-time-wrap');
     var preview = document.getElementById('sync-times-preview');
-    wrap.hidden = (freq === 0);
-    if (freq === 0) { preview.textContent = ''; return; }
-    var time = document.getElementById('sync_time').value;
-    if (!time) { preview.textContent = ''; return; }
-    var parts = time.split(':');
-    var h = parseInt(parts[0]), m = parseInt(parts[1]);
-    var times = [];
-    for (var i = 0; i < 24; i += freq) {
-      var th = (h + i) % 24;
-      times.push((th < 10 ? '0' : '') + th + ':' + (m < 10 ? '0' : '') + m);
+        wrap.hidden = (freq === 0);
+        if (freq === 0) { preview.textContent = ''; return; }
+        var time = document.getElementById('sync_time').value;
+        if (!time) { preview.textContent = ''; return; }
+        var parts = time.split(':');
+        var h = parseInt(parts[0]), m = parseInt(parts[1]);
+        var times = [];
+        for (var i = 0; i < 24; i += freq) {
+          var th = (h + i) % 24;
+          times.push((th < 10 ? '0' : '') + th + ':' + (m < 10 ? '0' : '') + m);
     }
     preview.textContent = 'Syncs at ' + times.join(', ');
   }
+  function toggleStartTime() { updateSyncPreview(); }
   document.getElementById('sync_frequency').addEventListener('change', updateSyncPreview);
   document.getElementById('sync_time').addEventListener('input', updateSyncPreview);
+  updateSyncPreview();
   </script>
-</div>
-
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-    <div class="card-title" style="font-size:15px;margin-bottom:0;">Sync log</div>
-    <form method="POST" action="/sync/clear" onsubmit="return confirm('Clear all sync logs?');">
-      <button type="submit" class="btn btn-ghost" style="font-size:12px;">Clear log</button>
-    </form>
-  </div>
-  {% if syncs %}
-    <table class="log-table">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Status</th>
-          <th>Transactions</th>
-          <th>Note</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in syncs %}
-        <tr>
-          <td class="utc-time">{{ s.ran_at }}</td>
-          <td><span class="badge {% if s.status == 'success' %}badge-success{% else %}badge-fail{% endif %}">{{ s.status }}</span></td>
-          <td>{{ s.tx_count }}</td>
-          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="var a=this.querySelector('.expand-arrow');if(this.style.whiteSpace==='normal'){this.style.whiteSpace='nowrap';a.textContent='\u25B8'}else{this.style.whiteSpace='normal';a.textContent='\u25BE'}"><span class="expand-arrow" style="font-size:10px;margin-right:4px;color:#4a5568;">&blacktriangleright;</span>{{ s.message or '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% if total_pages > 1 %}
-    <div style="display:flex;justify-content:center;align-items:center;gap:0.5rem;margin-top:1rem;">
-      {% if page > 1 %}<a href="?page={{ page - 1 }}" class="btn btn-ghost" style="font-size:12px;padding:4px 12px;">&larr;</a>{% endif %}
-      <span style="font-size:12px;color:#4a5568;">{{ page }} / {{ total_pages }}</span>
-      {% if page < total_pages %}<a href="?page={{ page + 1 }}" class="btn btn-ghost" style="font-size:12px;padding:4px 12px;">&rarr;</a>{% endif %}
     </div>
-    {% endif %}
-  {% else %}
-    <div style="color:#4a5568;font-size:13px;text-align:center;padding:2rem 0;line-height:1.6;">No syncs yet.<br>Click "Sync now" above or wait for the scheduled sync.</div>
-  {% endif %}
-</div>
 
-<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-  <button class="btn btn-ghost" id="update-btn" onclick="runUpdate()" style="font-size:12px;{% if update_available %}background:#10b981;color:#fff;border-color:transparent;{% endif %}">{% if update_available %}Update available{% else %}Check for updates{% endif %}</button>
-  <button class="btn btn-ghost" id="download-logs-btn" onclick="downloadLogs()" style="font-size:12px;">Download logs</button>
-  {% if activation_usage > 0 %}
-  <form method="POST" action="/settings/deactivate" onsubmit="return confirm('This will deactivate your license on this machine. You can re-enter your key to reactivate. Continue?');" style="margin:0;">
-    <button type="submit" class="btn btn-ghost" style="color:#ef4444;font-size:12px;">Deactivate license ({{ activation_usage }}/{{ activation_limit }})</button>
-  </form>
-  {% endif %}
+    <div class="card">
+      <div class="card-title" style="font-size:15px;margin-bottom:0;">Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:1rem;">
+        <button class="btn btn-ghost" id="update-btn" onclick="runUpdate()" style="font-size:12px;{% if update_available %}background:#10b981;color:#fff;border-color:transparent;{% endif %}">{% if update_available %}Update available{% else %}Check for updates{% endif %}</button>
+        <button class="btn btn-ghost" id="download-logs-btn" onclick="downloadLogs()" style="font-size:12px;">Download logs</button>
+        {% if activation_usage > 0 %}
+        <form method="POST" action="/settings/deactivate" onsubmit="return confirm('This will deactivate your license on this machine. You can re-enter your key to reactivate. Continue?');" style="margin:0;">
+          <button type="submit" class="btn btn-ghost" style="color:#ef4444;font-size:12px;">Deactivate license ({{ activation_usage }}/{{ activation_limit }})</button>
+        </form>
+        {% endif %}
+      </div>
+      <a href="/bank" style="display:block;text-align:center;margin-top:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:12px;font-size:14px;font-weight:600;text-decoration:none;">&larr; Manage banks</a>
+      <div id="update-status" style="font-size:12px; color:#94a3b8; margin-top:0.5rem; display:none;"></div>
+    </div>
+  </div>
 </div>
-<a href="/bank" style="display:block;text-align:center;margin-top:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:12px;font-size:14px;font-weight:600;text-decoration:none;">&larr; Manage banks</a>
-<div id="update-status" style="font-size:12px; color:#94a3b8; margin-top:0.5rem; display:none;"></div>
 
 <script>
 async function downloadLogs() {

@@ -25,7 +25,7 @@ APP_VERSION = os.environ.get("APP_VERSION", "dev")
 def inject_globals():
     return {
         "app_version": APP_VERSION,
-        "sidebar_enabled": db.get_setting("enable_sidebar") == "1",
+        "sidebar_enabled": db.get_setting("enable_sidebar") != "0",
     }
 
 def _detect_container_name():
