@@ -3,3 +3,7 @@ data/
 __pycache__/
 .env
 docker-compose.override.yml
+
+# macOS
+.DS_Store
+**/.DS_Store
