@@ -329,9 +329,14 @@ def _sync_account(account, state):
             already_matched = existing[:]
             new_txn        = []
 
+            skip_pending = bool(account.get("skip_pending"))
+
             for txn in raw:
                 try:
                     status = txn.get("status", "BOOK")
+                    if status == "PDNG" and skip_pending:
+                        skipped += 1
+                        continue
                     date   = _parse_date(txn)
                     amount = _parse_amount(txn)
                     payee  = _parse_payee(txn)

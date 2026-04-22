@@ -1027,6 +1027,15 @@ def disconnect():
             logger.warning("Failed to release bank seat for %s: %s", account.get("bank_name"), result.get("error"))
     return redirect(url_for("bank"))
 
+@app.route("/toggle-skip-pending", methods=["POST"])
+def toggle_skip_pending():
+    account_id = request.form.get("account_id")
+    if account_id:
+        skip = "1" if request.form.get("skip_pending") == "1" else "0"
+        db.update_bank_account_field(int(account_id), "skip_pending", skip)
+        logger.info("Set skip_pending=%s for account %s", skip, account_id)
+    return redirect(url_for("bank"))
+
 @app.route("/reset-sync", methods=["POST"])
 def reset_sync():
     account_id = request.form.get("account_id")
