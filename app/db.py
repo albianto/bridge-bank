@@ -44,6 +44,14 @@ def _ensure_tables(conn):
         conn.execute("ALTER TABLE bank_accounts ADD COLUMN start_sync_date TEXT")
     except Exception:
         pass
+    # Add provider columns if missing (migration for balance-only providers)
+    for col, sql in [
+        ("skip_pending", "ALTER TABLE bank_accounts ADD COLUMN skip_pending INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        try:
+            conn.execute(sql)
+        except Exception:
+            pass
     conn.commit()
 
     # Migrate legacy flat settings into bank_accounts table
@@ -160,7 +168,7 @@ def add_bank_account(session_id: str, account_uid: str, bank_name: str, bank_cou
         conn.commit()
 
 def update_bank_account_field(account_id: int, field: str, value: str):
-    allowed = {"start_sync_date", "session_id", "account_uid", "session_expiry", "actual_account", "bank_name", "bank_country"}
+    allowed = {"start_sync_date", "session_id", "account_uid", "session_expiry", "actual_account", "bank_name", "bank_country", "skip_pending"}
     if field not in allowed:
         raise ValueError(f"Field {field} is not updatable")
     with _conn() as conn:
