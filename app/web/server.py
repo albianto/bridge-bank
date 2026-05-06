@@ -393,8 +393,6 @@ def connect():
                 error = "Please select a bank."
             elif not actual_account:
                 error = "Please enter the Actual Budget account name."
-            elif db.get_bank_account_count() >= 999:
-                error = "Bank account limit reached."
             else:
                 # Validate that the account exists in Actual Budget
                 try:
@@ -443,9 +441,6 @@ def connect():
     success      = request.args.get("success")
     pem_ready    = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
 
-    # Fetch bank account count
-    bank_account_limit = 999
-
     return render_template("connect.html",
         error=error,
         success=success,
@@ -454,7 +449,6 @@ def connect():
         days_left=days_left,
         pem_ready=pem_ready,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
-        bank_account_limit=bank_account_limit,
         today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )
@@ -482,7 +476,6 @@ def reauthorise():
         return redirect(url_for("connect") + f"?error=Could not start re-authorisation: {e}")
 
     all_accounts = db.get_all_bank_accounts()
-    bank_account_limit = 999
 
     return render_template("connect.html",
         error=None,
@@ -491,7 +484,6 @@ def reauthorise():
         all_accounts=all_accounts,
         pem_ready=True,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
-        bank_account_limit=bank_account_limit,
         today=__import__('datetime').date.today().isoformat(),
         active="connect",
     )

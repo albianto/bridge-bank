@@ -53,7 +53,7 @@
     </div>
 
     {% if all_accounts %}
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#94a3b8;margin-bottom:0.5rem;">Connected accounts ({{ all_accounts|length }}/{{ bank_account_limit }})</div>
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#94a3b8;margin-bottom:0.5rem;">Connected accounts ({{ all_accounts|length }})</div>
     <div style="font-size:11px;color:#4a5568;margin-bottom:0.75rem;">Reset sync re-imports transactions from the start date. Existing transactions won't be duplicated.</div>
     {% for a in all_accounts %}
     <div style="margin-bottom:0.75rem;padding:12px 14px;border:1px solid #253450;border-radius:8px;">
