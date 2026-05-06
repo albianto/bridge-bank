@@ -1,10 +1,11 @@
 {
   "domain": "bridge_bank",
-  "name": "Bridge Bank OAuth Redirect",
+  "name": "Bridge Bank",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["http"],
-  "documentation": "",
-  "iot_class": "local_push",
+  "dependencies": ["http", "hassio"],
+  "documentation": "https://github.com/albianto/bridge-bank",
+  "iot_class": "local_polling",
+  "requirements": ["aiohttp"],
   "version": "1.0.0"
 }

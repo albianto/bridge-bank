@@ -49,7 +49,7 @@
     <div class="card-sub">Step 3 of 4 — search for your bank and authorise read-only access.</div>
 
     <div style="margin-bottom:1rem;padding:10px 14px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:13px;color:#6ee7b7;display:flex;align-items:center;gap:8px;">
-      <span>&#10003;</span> Private key loaded. <a href="/connect/reset-pem" style="color:#94a3b8;font-size:12px;margin-left:auto;">Replace</a>
+      <span>&#10003;</span> Private key loaded. <a href="{{ ingress_entry }}/connect/reset-pem" style="color:#94a3b8;font-size:12px;margin-left:auto;">Replace</a>
     </div>
 
     {% if all_accounts %}
@@ -67,14 +67,14 @@
         <div style="display:flex;gap:6px;">
           <div>
             <button type="button" class="btn btn-ghost" style="font-size:11px;padding:6px 10px;" onclick="this.style.display='none';this.nextElementSibling.style.display='flex';" id="reset-btn-{{ a.id }}">Reset sync</button>
-            <form method="POST" action="/reset-sync" style="display:none;gap:4px;align-items:center;" id="reset-form-{{ a.id }}" onsubmit="return confirm('Reset sync for this account? Transactions from the selected date will be re-imported on the next sync.');">
+            <form method="POST" action="{{ ingress_entry }}/reset-sync" style="display:none;gap:4px;align-items:center;" id="reset-form-{{ a.id }}" onsubmit="return confirm('Reset sync for this account? Transactions from the selected date will be re-imported on the next sync.');">
               <input type="hidden" name="account_id" value="{{ a.id }}">
               <input type="date" name="reset_date" value="{{ a.start_sync_date or today }}" required style="font-size:11px;padding:4px 6px;">
               <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:6px 10px;">Confirm</button>
               <button type="button" class="btn btn-ghost" style="font-size:11px;padding:6px 10px;color:#4a5568;" onclick="this.parentElement.style.display='none';document.getElementById('reset-btn-{{ a.id }}').style.display='';">Cancel</button>
             </form>
           </div>
-          <form method="POST" action="/disconnect" onsubmit="return confirm('Disconnect this bank account? Syncing will stop for this account until you reconnect.');">
+          <form method="POST" action="{{ ingress_entry }}/disconnect" onsubmit="return confirm('Disconnect this bank account? Syncing will stop for this account until you reconnect.');">
             <input type="hidden" name="account_id" value="{{ a.id }}">
             <button type="submit" class="btn btn-danger">Disconnect</button>
           </form>
@@ -83,7 +83,7 @@
       {% if a.session_expiry %}
       <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#4a5568;">
         <span>Expires {{ a.session_expiry[:10] }}</span>
-        <form method="POST" action="/connect/reauthorise" style="display:inline;">
+        <form method="POST" action="{{ ingress_entry }}/connect/reauthorise" style="display:inline;">
           <input type="hidden" name="account_id" value="{{ a.id }}">
           <input type="hidden" name="bank_name" value="{{ a.bank_name }}">
           <input type="hidden" name="bank_country" value="{{ a.bank_country }}">
@@ -134,7 +134,7 @@
       <div style="font-size:15px;font-weight:600;margin-bottom:0.5rem;">Authorise your bank</div>
       <div style="font-size:13px;color:#94a3b8;margin-bottom:1.5rem;line-height:1.6;">Click the button below to open your bank login page.<br>After approving, you will be returned here automatically.</div>
     </div>
-    <a href="{{ auth_url }}" class="btn btn-primary">Open bank login &rarr;</a>
+    <a href="{{ auth_url }}" target="_blank" rel="noopener" class="btn btn-primary">Open bank login &rarr;</a>
     <form method="POST" style="margin-top:0.75rem;">
       <input type="hidden" name="action" value="cancel">
       <button type="submit" class="btn btn-ghost" style="width:100%;">Cancel</button>
@@ -143,7 +143,7 @@
 {% endif %}
 
 {% if all_accounts and not auth_url %}
-  <a href="/status" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Continue to status &rarr;</a>
+  <a href="{{ ingress_entry }}/status" class="btn btn-primary" style="width:100%;text-align:center;display:block;">Continue to status &rarr;</a>
 {% endif %}
 
 <script>
@@ -151,7 +151,7 @@
 
   async function loadBanks() {
     try {
-      const resp = await fetch('/banks');
+      const resp = await fetch('{{ ingress_entry }}/banks');
       allBanks = await resp.json();
       const q = document.getElementById('bank-search');
       if (q && q.value.trim()) filterBanks(q.value);

@@ -23,14 +23,49 @@ Bridge Bank connects to your EU bank via open banking and imports your transacti
 
 ## Requirements
 
-- Docker and Docker Compose (runs on x86, Raspberry Pi, and other ARM devices)
+- A [Home Assistant](https://www.home-assistant.io/) instance with Supervisor (HAOS or Supervised install), **or** Docker and Docker Compose for standalone mode
 - A free [Enable Banking](https://enablebanking.com/) account
 - A self-hosted [Actual Budget](https://actualbudget.org/) instance
 
 ---
 
-## Quick start
+## Installation
 
+### Option A: Home Assistant Add-on (recommended)
+
+1. In Home Assistant, go to **Settings → Add-ons → Add-on Store**
+2. Click the three dots (⋮) in the top right, then **Repositories**
+3. Add this repository URL: `https://github.com/albianto/bridge-bank`
+4. Find **Bridge Bank** in the store and click **Install**
+5. Go to the **Configuration** tab and fill in your Actual Budget details (URL, password, Sync ID, account name)
+6. Start the add-on
+7. Click **Open Web UI** (or find it in the sidebar as "Bridge Bank") to access the setup wizard
+
+The add-on web UI is accessible directly from Home Assistant's sidebar via Ingress — no port forwarding needed.
+
+#### Home Assistant Integration (optional sensors)
+
+To get sync status sensors in Home Assistant:
+
+1. Copy the `ha_component/bridge_bank/` folder to your Home Assistant `custom_components/` directory
+2. Restart Home Assistant
+3. Go to **Settings → Devices & Services → Add Integration → Bridge Bank**
+4. Enter the Bridge Bank URL (use `http://localhost:3000` if running as an add-on)
+
+This gives you three sensors:
+- **Bridge Bank Status** — overall health (ok / degraded / unhealthy)
+- **Bridge Bank Last Sync** — timestamp and status of the last sync
+- **Bridge Bank Banks Connected** — number of connected bank accounts
+
+#### OAuth with Nabu Casa
+
+If you use Nabu Casa for remote access and need bank OAuth redirects to work externally:
+
+1. In Enable Banking, set the redirect URL to: `https://<your-nabu-casa-url>/api/bridge_bank/callback`
+2. In the Bridge Bank add-on configuration, set `eb_redirect_url` to the same URL
+3. Install the Bridge Bank integration (above) — it will catch the OAuth callback and redirect it to the add-on
+
+### Option B: Standalone Docker
 
 ### 1. Set up Enable Banking
 
@@ -50,12 +85,12 @@ Enable Banking is the regulated open banking provider that connects Bridge Bank 
 6. Select your country and bank from the dropdowns and click **Link**
 7. Follow the steps to log in to your bank and approve read-only access — this activates your Enable Banking app
 
-### 2. Install Bridge Bank
+### 2. Install Bridge Bank (standalone Docker)
 
 **On your server**, create the folder and download the compose file:
 ```bash
 mkdir -p ~/bridge-bank/data && cd ~/bridge-bank
-curl -O https://raw.githubusercontent.com/DAdjadj/bridge-bank/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/albianto/bridge-bank/main/docker-compose.yml
 ```
 
 Start the container:
@@ -142,3 +177,12 @@ Each licence key supports up to 2 machine activations. To move Bridge Bank to a 
 MIT + Commons Clause. Free to self-host for personal use. You may not sell, sublicense, or offer Bridge Bank as a competing service.
 
 Built by [David Alves](https://david-alves.com).
+
+---
+
+## To generate Docker Image run
+
+```bash
+docker buildx build --platform linux/amd64 -t bridge-bank:latest -o type=oci,dest=bridge-bank-oci.tar .
+scp /Users/Alberto/Downloads/bridge-bank-main/bridge-bank-oci.tar root@192.168.1.250:/var/lib/vz/template/cache/
+```

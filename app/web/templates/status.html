@@ -11,14 +11,14 @@
 {% block content %}
 
 {% if days_left is not none and days_left <= 14 %}
-  <div class="alert alert-warn">A bank connection expires in {{ days_left }} day{{ 's' if days_left != 1 else '' }}. <a href="/connect" style="color:inherit;font-weight:600;">Manage banks &rarr;</a></div>
+  <div class="alert alert-warn">A bank connection expires in {{ days_left }} day{{ 's' if days_left != 1 else '' }}. <a href="{{ ingress_entry }}/connect" style="color:inherit;font-weight:600;">Manage banks &rarr;</a></div>
 {% endif %}
 
 {% if show_review_prompt %}
 <div class="card" style="border-color:#3b82f6; border-width:1px;">
   <div class="card-title" style="margin-bottom:0.25rem;">How's Bridge Bank working for you?</div>
   <div class="card-sub" style="margin-bottom:1rem;">Your feedback helps other users find Bridge Bank.</div>
-  <form method="POST" action="/review/submit" id="review-form">
+  <form method="POST" action="{{ ingress_entry }}/review/submit" id="review-form">
     <div style="margin-bottom:1rem;">
       <div id="star-rating" style="display:flex;gap:4px;font-size:28px;cursor:pointer;user-select:none;">
         <span class="review-star" data-val="1">&#9734;</span>
@@ -33,7 +33,7 @@
     <input type="text" name="name" placeholder="Your name (optional)" style="width:100%;box-sizing:border-box;background:#1a2235;border:1px solid #1e2a40;border-radius:8px;color:#e2e8f0;padding:0.75rem;font-size:13px;font-family:inherit;margin-bottom:1rem;">
     <div style="display:flex;align-items:center;gap:1rem;">
       <button type="submit" class="btn" id="review-submit-btn" disabled style="background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;opacity:0.5;">Submit review</button>
-      <a href="/review/dismiss" onclick="event.preventDefault();fetch('/review/dismiss',{method:'POST'}).then(()=>location.reload());" style="font-size:13px;color:#64748b;text-decoration:none;">Maybe later</a>
+      <a href="{{ ingress_entry }}/review/dismiss" onclick="event.preventDefault();fetch('{{ ingress_entry }}/review/dismiss',{method:'POST'}).then(()=>location.reload());" style="font-size:13px;color:#64748b;text-decoration:none;">Maybe later</a>
     </div>
   </form>
 </div>
@@ -92,7 +92,7 @@
 
 <div class="card">
   <div class="card-title" style="font-size:15px; margin-bottom:0.75rem;">Sync schedule</div>
-  <form method="POST" action="/setup/sync" id="sync-form">
+  <form method="POST" action="{{ ingress_entry }}/setup/sync" id="sync-form">
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
       <div id="freq-wrap">
         <label for="sync_frequency" style="margin-top:0;font-size:11px;">Frequency</label>
@@ -137,7 +137,7 @@
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
     <div class="card-title" style="font-size:15px;margin-bottom:0;">Sync log</div>
-    <form method="POST" action="/sync/clear" onsubmit="return confirm('Clear all sync logs?');">
+    <form method="POST" action="{{ ingress_entry }}/sync/clear" onsubmit="return confirm('Clear all sync logs?');">
       <button type="submit" class="btn btn-ghost" style="font-size:12px;">Clear log</button>
     </form>
   </div>
@@ -175,10 +175,11 @@
 </div>
 
 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-  <button class="btn btn-ghost" id="update-btn" onclick="runUpdate()" style="font-size:12px;{% if update_available %}background:#10b981;color:#fff;border-color:transparent;{% endif %}">{% if update_available %}Update available{% else %}Check for updates{% endif %}</button>
+  <button class="btn btn-ghost" id="upload-btn" onclick="document.getElementById('image-upload').click()" style="font-size:12px;">Upload update</button>
+  <input type="file" id="image-upload" style="display:none;" onchange="uploadImage(this)">
   <button class="btn btn-ghost" id="download-logs-btn" onclick="downloadLogs()" style="font-size:12px;">Download logs</button>
 </div>
-<a href="/connect" style="display:block;text-align:center;margin-top:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:12px;font-size:14px;font-weight:600;text-decoration:none;">&larr; Manage banks</a>
+<a href="{{ ingress_entry }}/connect" style="display:block;text-align:center;margin-top:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border-radius:8px;padding:12px;font-size:14px;font-weight:600;text-decoration:none;">&larr; Manage banks</a>
 <div id="update-status" style="font-size:12px; color:#94a3b8; margin-top:0.5rem; display:none;"></div>
 
 <script>
@@ -187,7 +188,7 @@ async function downloadLogs() {
   btn.textContent = 'Fetching...';
   btn.disabled = true;
   try {
-    var resp = await fetch('/api/logs?lines=500');
+    var resp = await fetch('{{ ingress_entry }}/api/logs?lines=500');
     var data = await resp.json();
     if (data.logs) {
       var blob = new Blob([data.logs], { type: 'text/plain' });
@@ -232,11 +233,11 @@ async function uploadImage(input) {
   } catch(e) {
     status.textContent = 'Update may be in progress. Refreshing...';
     setTimeout(function pollServer() {
-      fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
+      fetch('{{ ingress_entry }}/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
     }, 3000);
   }
   input.value = '';
-  }
+}
 
 async function runSync() {
   const btn = document.getElementById('sync-btn');
@@ -244,11 +245,11 @@ async function runSync() {
   btn.style.opacity = '0.6';
   btn.disabled = true;
   try {
-    await fetch('/sync/now', { method: 'POST' });
+    await fetch('{{ ingress_entry }}/sync/now', { method: 'POST' });
     var attempts = 0;
     var poll = setInterval(function() {
       attempts++;
-      fetch('/api/sync-status').then(function(r) { return r.json(); }).then(function(d) {
+      fetch('{{ ingress_entry }}/api/sync-status').then(function(r) { return r.json(); }).then(function(d) {
         if (!d.running && attempts > 1) {
           clearInterval(poll);
           location.reload();

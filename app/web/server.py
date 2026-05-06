@@ -1,7 +1,8 @@
 import logging
+import os
 import re
 import threading
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, has_request_context, send_from_directory
 from .. import config, db, sync
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,44 @@ def _actual_ssl_cert():
         return False
     return None
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+# Ingress base path: HA may set INGRESS_ENTRY env var (e.g. "/api/hassio_ingress/<token>")
+INGRESS_ENTRY = os.environ.get("INGRESS_ENTRY", "").rstrip("/")
+
+
+def _ingress_entry_from_request():
+    """Detect ingress base path from proxy headers when env var is not available."""
+    if not has_request_context():
+        return ""
+
+    # Home Assistant ingress forwards one of these headers depending on version/proxy.
+    for header_name in ("X-Ingress-Path", "X-Forwarded-Prefix"):
+        value = (request.headers.get(header_name) or "").strip()
+        if value:
+            return value.rstrip("/")
+
+    # Fallback: extract from referer when the proxy doesn't expose ingress headers.
+    referer = request.headers.get("Referer", "")
+    match = re.search(r"https?://[^/]+(/api/hassio_ingress/[^/?#]+)", referer)
+    if match:
+        return match.group(1).rstrip("/")
+
+    # Last fallback: some setups forward the full prefixed path to Flask.
+    path_match = re.match(r"^(/api/hassio_ingress/[^/]+)(?:/|$)", request.path or "")
+    if path_match:
+        return path_match.group(1).rstrip("/")
+
+    return ""
+
+
+def _get_ingress_entry():
+    """Return ingress base path from env or request headers."""
+    if INGRESS_ENTRY:
+        return INGRESS_ENTRY
+    return _ingress_entry_from_request()
+
+app = Flask(__name__, template_folder="templates", static_folder="static",
+            static_url_path="/static")
+
 def _get_secret_key():
     stored = db.get_setting("flask_secret_key")
     if stored:
@@ -24,12 +62,23 @@ def _get_secret_key():
 
 app.secret_key = _get_secret_key()
 
-import os
 APP_VERSION = os.environ.get("APP_VERSION", "dev")
 
 @app.context_processor
-def inject_version():
-    return {"app_version": APP_VERSION}
+def inject_globals():
+    return {"app_version": APP_VERSION, "ingress_entry": _get_ingress_entry()}
+
+def _ingress_url_for(endpoint, **values):
+    """Generate a URL prefixed with the Ingress base path."""
+    path = url_for(endpoint, **values)
+    ingress_entry = _get_ingress_entry()
+    if ingress_entry:
+        return ingress_entry + path
+    return path
+
+def _ingress_redirect(endpoint, **values):
+    """Redirect to an endpoint, respecting the Ingress base path."""
+    return redirect(_ingress_url_for(endpoint, **values))
 
 def _detect_container_name():
     """Detect container name from mounted compose file or fall back to default."""
@@ -66,10 +115,10 @@ COUNTRIES = [
 @app.route("/")
 def index():
     if not config.is_configured():
-        return redirect(url_for("setup_bank"))
+        return _ingress_redirect("setup_bank")
     if not config.is_connected():
-        return redirect(url_for("connect"))
-    return redirect(url_for("status"))
+        return _ingress_redirect("connect")
+    return _ingress_redirect("status")
 
 # ---------------------------------------------------------------------------
 # Setup step 1: Enable Banking
@@ -77,7 +126,7 @@ def index():
 
 @app.route("/setup")
 def setup_redirect():
-    return redirect(url_for("setup_bank"))
+    return _ingress_redirect("setup_bank")
 
 @app.route("/setup/bank", methods=["GET", "POST"])
 def setup_bank():
@@ -102,7 +151,7 @@ def setup_bank():
             db.set_setting("eb_app_id", app_id)
             if pem_content:
                 db.set_setting("eb_pem_content", pem_content)
-            return redirect(url_for("setup_actual"))
+            return _ingress_redirect("setup_actual")
     return render_template("setup_bank.html",
         error=error,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
@@ -147,8 +196,8 @@ def setup_actual():
                 config.set("ACTUAL_SYNC_ID", sync_id)
                 config.set("ACTUAL_ACCOUNT", account)
                 if config.NOTIFY_ENABLED.lower() in ("false", "0", "no"):
-                    return redirect(url_for("connect"))
-                return redirect(url_for("setup_notifications"))
+                    return _ingress_redirect("connect")
+                return _ingress_redirect("setup_notifications")
     return render_template("setup_actual.html",
         error=error,
         actual_url=config.ACTUAL_URL,
@@ -186,7 +235,7 @@ def setup_notifications():
             scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
             host   = request.headers.get("X-Forwarded-Host", request.host)
             config.set("BRIDGE_BANK_URL", f"{scheme}://{host}")
-            return redirect(url_for("connect"))
+            return _ingress_redirect("connect")
     return render_template("setup_notifications.html",
         error=error,
         notify_email=config.NOTIFY_EMAIL,
@@ -244,7 +293,7 @@ def setup_sync():
         if start_date:
             config.set("START_SYNC_DATE", start_date)
         _start_scheduler_if_ready()
-        return redirect(url_for("status"))
+        return _ingress_redirect("status")
     has_synced = bool(db.get_last_sync())
     return render_template("setup_sync.html",
         error=error,
@@ -381,7 +430,7 @@ def connect():
                     db.set_setting("eb_pem_content", pem_content)
                     db.set_setting("eb_app_id", app_id)
                     config.set("EB_APPLICATION_ID", app_id)
-                    return redirect(url_for("connect"))
+                    return _ingress_redirect("connect")
 
         elif action == "start":
             bank_name       = request.form.get("bank_name", "").strip()
@@ -434,7 +483,7 @@ def connect():
             db.set_setting("pending_bank_name", "")
             db.set_setting("pending_bank_country", "")
             db.set_setting("pending_reauth_account_id", "")
-            return redirect(url_for("connect"))
+            return _ingress_redirect("connect")
 
     all_accounts = db.get_all_bank_accounts()
     days_left    = _get_days_left()
@@ -463,7 +512,7 @@ def reauthorise():
     bank_name    = request.form.get("bank_name", "").strip()
     bank_country = request.form.get("bank_country", "").strip()
     if not bank_name or not bank_country:
-        return redirect(url_for("connect"))
+        return _ingress_redirect("connect")
     try:
         from .. import enablebanking
         db.set_setting("pending_reauth_account_id", account_id)
@@ -473,7 +522,7 @@ def reauthorise():
         auth_url = result["url"]
     except Exception as e:
         logger.error("Failed to start reauth: %s", e)
-        return redirect(url_for("connect") + f"?error=Could not start re-authorisation: {e}")
+        return redirect(_ingress_url_for("connect") + f"?error=Could not start re-authorisation: {e}")
 
     all_accounts = db.get_all_bank_accounts()
 
@@ -530,7 +579,7 @@ def callback():
     error = request.args.get("error")
     if error or not code:
         logger.warning("Callback received error=%s code=%s", error, bool(code))
-        return redirect(url_for("connect") + "?error=Bank connection was cancelled or denied. Please try again.")
+        return redirect(_ingress_url_for("connect") + "?error=Bank connection was cancelled or denied. Please try again.")
     try:
         from .. import enablebanking
         result = enablebanking.complete_auth(code=code, state=state)
@@ -541,27 +590,27 @@ def callback():
                 account_uid = accounts[0].get("uid") or accounts[0].get("account_uid") or accounts[0].get("resource_id")
                 logger.info("Auto-connecting single account uid=%s", account_uid)
                 _save_bank_account(result["session_id"], account_uid, result.get("valid_until", ""))
-                return redirect(url_for("status"))
+                return _ingress_redirect("status")
             else:
                 import json
                 logger.info("Multiple accounts — redirecting to account picker")
                 db.set_setting("pending_auth_session_id", result["session_id"])
                 db.set_setting("pending_auth_accounts", json.dumps(accounts))
                 db.set_setting("pending_auth_valid_until", result.get("valid_until", ""))
-                return redirect(url_for("pick_account"))
+                return _ingress_redirect("pick_account")
         else:
             logger.warning("Callback: complete_auth returned no accounts")
-            return redirect(url_for("connect") + "?error=Your bank did not return any accounts. This may happen if you declined account access during authorisation, or if the selected account type is not supported by your bank through open banking. Please try again and make sure to approve access to at least one account.")
+            return redirect(_ingress_url_for("connect") + "?error=Your bank did not return any accounts. This may happen if you declined account access during authorisation, or if the selected account type is not supported by your bank through open banking. Please try again and make sure to approve access to at least one account.")
     except Exception as e:
         logger.error("Callback failed: %s", e)
-        return redirect(url_for("connect") + "?error=Bank connection failed: " + str(e) + ". If this keeps happening, please download your logs from the Status page.")
+        return redirect(_ingress_url_for("connect") + "?error=Bank connection failed: " + str(e) + ". If this keeps happening, please download your logs from the Status page.")
 
 @app.route("/pick-account")
 def pick_account():
     import json
     accounts_json = db.get_setting("pending_auth_accounts")
     if not accounts_json:
-        return redirect(url_for("connect"))
+        return _ingress_redirect("connect")
     accounts = json.loads(accounts_json)
     return render_template("pick_account.html", accounts=accounts, active="connect")
 
@@ -569,16 +618,16 @@ def pick_account():
 def pick_account_post():
     account_uid = request.form.get("account_uid")
     if not account_uid:
-        return redirect(url_for("pick_account"))
+        return _ingress_redirect("pick_account")
     session_id  = db.get_setting("pending_auth_session_id")
     valid_until = db.get_setting("pending_auth_valid_until")
     try:
         _save_bank_account(session_id, account_uid, valid_until)
     except Exception as e:
-        return redirect(url_for("connect") + "?error=" + str(e))
+        return redirect(_ingress_url_for("connect") + "?error=" + str(e))
     for key in ["pending_auth_session_id", "pending_auth_accounts", "pending_auth_valid_until"]:
         db.set_setting(key, "")
-    return redirect(url_for("status"))
+    return _ingress_redirect("status")
 
 # ---------------------------------------------------------------------------
 # Status
@@ -587,9 +636,9 @@ def pick_account_post():
 @app.route("/status")
 def status():
     if not config.is_configured():
-        return redirect(url_for("setup_bank"))
+        return _ingress_redirect("setup_bank")
     if not config.is_connected():
-        return redirect(url_for("connect"))
+        return _ingress_redirect("connect")
 
     page         = request.args.get("page", 1, type=int)
     log_data     = db.get_sync_log_page(page=page, per_page=5)
@@ -680,7 +729,7 @@ def status():
 @app.route("/sync/clear", methods=["POST"])
 def clear_sync_log():
     db.clear_sync_log()
-    return redirect(url_for("status"))
+    return _ingress_redirect("status")
 
 # ---------------------------------------------------------------------------
 # Sync now
@@ -712,16 +761,16 @@ def sync_status():
 @app.route("/review/dismiss", methods=["POST"])
 def review_dismiss():
     db.set_setting("review_dismissed", "1")
-    return redirect(url_for("status"))
+    return _ingress_redirect("status")
 
 @app.route("/review/submit", methods=["POST"])
 def review_submit():
     rating = request.form.get("rating", "").strip()
     review_text = request.form.get("review", "").strip()
     if not rating or not review_text:
-        return redirect(url_for("status"))
+        return _ingress_redirect("status")
     db.set_setting("review_submitted", "1")
-    return redirect(url_for("status"))
+    return _ingress_redirect("status")
 
 
 # ---------------------------------------------------------------------------
@@ -732,14 +781,14 @@ def review_submit():
 def reset_pem():
     db.set_setting("eb_pem_content", "")
     db.set_setting("eb_app_id", "")
-    return redirect(url_for("connect"))
+    return _ingress_redirect("connect")
 
 @app.route("/disconnect", methods=["POST"])
 def disconnect():
     account_id = request.form.get("account_id")
     if account_id:
         db.remove_bank_account(int(account_id))
-    return redirect(url_for("connect"))
+    return _ingress_redirect("connect")
 
 @app.route("/reset-sync", methods=["POST"])
 def reset_sync():
@@ -755,7 +804,7 @@ def reset_sync():
         if reset_date:
             db.update_bank_account_field(int(account_id), "start_sync_date", reset_date)
         logger.info("Reset sync state for account %s (start_date=%s)", account_id, reset_date)
-    return redirect(url_for("connect"))
+    return _ingress_redirect("connect")
 
 # ---------------------------------------------------------------------------
 # Logs

@@ -6,14 +6,28 @@ from homeassistant.core import HomeAssistant
 
 DOMAIN = "bridge_bank"
 
+# Internal Docker hostname for the add-on on the HA network.
+# Local add-ons: "local-<slug>", community/repo add-ons: "<repo_slug>-<addon_slug>"
+ADDON_URL = "http://local-bridge-bank:3000"
+
 
 class BridgeBankConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Bridge Bank."""
 
     VERSION = 1
 
+    async def async_step_hassio(self, discovery_info: dict | None = None):
+        """Auto-configure when the Bridge Bank add-on is running — no user action needed."""
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+
+        return self.async_create_entry(
+            title="Bridge Bank",
+            data={"bridge_bank_url": ADDON_URL},
+        )
+
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+        """Handle the manual step."""
         errors = {}
 
         if user_input is not None:
@@ -21,6 +35,8 @@ class BridgeBankConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not url.startswith("http"):
                 errors["bridge_bank_url"] = "invalid_url"
             else:
+                await self.async_set_unique_id(DOMAIN)
+                self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title="Bridge Bank",
                     data={"bridge_bank_url": url},
@@ -32,7 +48,7 @@ class BridgeBankConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         "bridge_bank_url",
-                        default="http://192.168.1.100:3002",
+                        default=ADDON_URL,
                     ): str,
                 }
             ),

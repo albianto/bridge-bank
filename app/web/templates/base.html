@@ -6,11 +6,31 @@
   <title>{% block title %}Bridge Bank{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ ingress_entry }}/static/style.css">
+  <script>
+    // Inherit HA theme CSS variables from parent frame (same-origin via Ingress)
+    (function() {
+      if (window.parent === window) return;
+      var vars = [
+        'primary-background-color','card-background-color','primary-text-color',
+        'secondary-text-color','divider-color','primary-color','accent-color',
+        'error-color','warning-color','success-color','info-color',
+        'disabled-text-color','input-fill-color','ha-font-family','ha-card-background'
+      ];
+      try {
+        var ps = getComputedStyle(window.parent.document.documentElement);
+        var root = document.documentElement;
+        vars.forEach(function(v) {
+          var val = ps.getPropertyValue('--' + v).trim();
+          if (val) root.style.setProperty('--' + v, val);
+        });
+      } catch(e) { /* cross-origin or sandboxed */ }
+    })();
+  </script>
 </head>
 <body>
   <div class="wrap">
-    <a class="logo" href="/">
+    <a class="logo" href="{{ ingress_entry }}/">
       <div class="logo-mark">&#x27F7;</div>
       <span class="logo-name">Bridge Bank</span>
     </a>
@@ -18,11 +38,11 @@
     {% block content %}{% endblock %}
     {% block nav %}
     <nav class="footer-nav">
-      <a href="/setup/bank" {% if active == 'bank' %}class="active"{% endif %}>Bank Setup</a>
-      <a href="/setup/actual" {% if active == 'actual' %}class="active"{% endif %}>Actual Budget</a>
-      <a href="/setup/notifications" {% if active == 'notifications' %}class="active"{% endif %}>Notifications</a>
-      <a href="/connect" {% if active == 'connect' %}class="active"{% endif %}>Bank</a>
-      <a href="/status" {% if active == 'status' %}class="active"{% endif %}>Status</a>
+      <a href="{{ ingress_entry }}/setup/bank" {% if active == 'bank' %}class="active"{% endif %}>Bank Setup</a>
+      <a href="{{ ingress_entry }}/setup/actual" {% if active == 'actual' %}class="active"{% endif %}>Actual Budget</a>
+      <a href="{{ ingress_entry }}/setup/notifications" {% if active == 'notifications' %}class="active"{% endif %}>Notifications</a>
+      <a href="{{ ingress_entry }}/connect" {% if active == 'connect' %}class="active"{% endif %}>Bank</a>
+      <a href="{{ ingress_entry }}/status" {% if active == 'status' %}class="active"{% endif %}>Status</a>
     </nav>
     {% endblock %}
   </div>

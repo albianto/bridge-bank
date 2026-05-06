@@ -1,0 +1,60 @@
+# Home Assistant Add-on: Bridge Bank
+name: Bridge Bank
+description: >-
+  Sync EU bank transactions to Actual Budget via Enable Banking open banking APIs.
+  Supports 2,500+ banks across 29 countries with automatic daily syncing,
+  duplicate detection, and pending transaction tracking.
+version: 1.0.0
+slug: bridge_bank
+url: "https://github.com/albianto/bridge-bank"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - i386
+startup: application
+init: false
+boot: auto
+ingress: true
+ingress_port: 3000
+panel_icon: mdi:bank-transfer
+panel_title: Bridge Bank
+homeassistant_api: true
+map:
+  - homeassistant_config:rw
+options:
+  actual_url: ""
+  actual_password: ""
+  actual_sync_id: ""
+  actual_account: ""
+  actual_verify_ssl: false
+  eb_redirect_url: ""
+  sync_time: "06:00"
+  sync_frequency: 24
+  notify_email: ""
+  smtp_user: ""
+  smtp_password: ""
+  smtp_host: ""
+  smtp_port: 587
+  smtp_from: ""
+  notify_on: "all"
+schema:
+  actual_url: url?
+  actual_password: password?
+  actual_sync_id: str?
+  actual_account: str?
+  actual_verify_ssl: bool
+  eb_redirect_url: url?
+  sync_time: str
+  sync_frequency: "int(0,24)"
+  notify_email: email?
+  smtp_user: str?
+  smtp_password: password?
+  smtp_host: str?
+  smtp_port: "int(1,65535)"
+  smtp_from: str?
+  notify_on: list(all|errors)?
+discovery:
+  - bridge_bank
+environment:
+  SUPERVISOR_TOKEN: "{SUPERVISOR_TOKEN}"

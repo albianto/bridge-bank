@@ -70,7 +70,7 @@ async function sendTestEmail() {
   btn.textContent = 'Sending...';
   btn.disabled = true;
   try {
-    var res = await fetch('/email/test', {
+    var res = await fetch('{{ ingress_entry }}/email/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -107,7 +107,7 @@ async function checkUnsubStatus() {
     return;
   }
   try {
-    var res = await fetch('/email/unsubscribe-status');
+    var res = await fetch('{{ ingress_entry }}/email/unsubscribe-status');
     var data = await res.json();
     _isUnsub = data.unsubscribed;
     updateUnsubUI();
@@ -142,7 +142,7 @@ async function toggleUnsubscribe() {
   btn.disabled = true;
   btn.textContent = _isUnsub ? 'Re-enabling...' : 'Unsubscribing...';
   try {
-    var endpoint = _isUnsub ? '/email/resubscribe' : '/email/unsubscribe';
+    var endpoint = _isUnsub ? '{{ ingress_entry }}/email/resubscribe' : '{{ ingress_entry }}/email/unsubscribe';
     var res = await fetch(endpoint, { method: 'POST' });
     var data = await res.json();
     if (res.ok) {

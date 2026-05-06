@@ -1,0 +1,5 @@
+channel: stable
+repositories:
+  - name: Bridge Bank
+    url: https://github.com/albianto/bridge-bank
+    maintainer: albianto
