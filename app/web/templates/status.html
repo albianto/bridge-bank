@@ -70,18 +70,19 @@
 {% endif %}
 
 <div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
-    <div>
+  <div class="card-header-row">
+    <div class="card-header-text">
       <div class="card-title" style="margin-bottom:0.25rem;">Status</div>
       <div class="card-sub" style="margin-bottom:0;">{{ fun_message }}</div>
     </div>
-    <button class="btn btn-ghost" id="sync-btn" onclick="runSync()">Sync now</button>
+    <button class="btn btn-ghost sync-btn" id="sync-btn" onclick="runSync()">Sync now</button>
   </div>
   <div class="stat-row">
     <span class="stat-label">Last sync</span>
     <span class="stat-value utc-time">{{ last_sync or 'Never' }}</span>
   </div>
   <div class="stat-row"><span class="stat-label">Notifications</span><span class="stat-value">{{ notify_email or 'Disabled' }}</span></div>
+  <div class="stat-row"><span class="stat-label">Bank slots</span><span class="stat-value">{{ bank_seat_usage }}/{{ bank_account_limit }}</span></div>
   {% if total_tx >= 0 %}
   <div class="stat-row"><span class="stat-label">Transactions synced</span><span class="stat-value">{{ total_tx }}</span></div>
   {% endif %}
@@ -142,6 +143,7 @@
     </form>
   </div>
   {% if syncs %}
+    <div class="log-table-wrap">
     <table class="log-table">
       <thead>
         <tr>
@@ -162,6 +164,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% if total_pages > 1 %}
     <div style="display:flex;justify-content:center;align-items:center;gap:0.5rem;margin-top:1rem;">
       {% if page > 1 %}<a href="?page={{ page - 1 }}" class="btn btn-ghost" style="font-size:12px;padding:4px 12px;">&larr;</a>{% endif %}
