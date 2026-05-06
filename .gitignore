@@ -4,3 +4,7 @@ __pycache__/
 .env
 docker-compose.override.yml
 *.tar
+
+# macOS
+.DS_Store
+**/.DS_Store
