@@ -205,34 +205,28 @@ async function downloadLogs() {
   btn.disabled = false;
 }
 
-async function runUpdate() {
-  const btn = document.getElementById('update-btn');
+async function uploadImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const btn = document.getElementById('upload-btn');
   const status = document.getElementById('update-status');
-  btn.textContent = 'Checking...';
+  const file = input.files[0];
+  btn.textContent = 'Uploading...';
   btn.disabled = true;
   status.style.display = 'block';
-  status.textContent = 'Checking for updates...';
+  status.textContent = 'Uploading ' + file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)...';
   try {
-    const check = await fetch('/update/check');
-    const checkData = await check.json();
-    if (!checkData.available) {
-      status.textContent = 'Already up to date.';
-      btn.textContent = 'Check for updates';
-      btn.disabled = false;
-      setTimeout(function() { status.style.display = 'none'; }, 3000);
-      return;
-    }
-    status.textContent = 'Update found. Installing...';
-    const resp = await fetch('/update/run', { method: 'POST' });
+    const form = new FormData();
+    form.append('image', file);
+    const resp = await fetch('{{ ingress_entry }}/update/upload', { method: 'POST', body: form });
     const data = await resp.json();
     if (data.updating) {
-      status.textContent = 'Restarting...';
+      status.textContent = 'Image loaded. Restarting...';
       setTimeout(function pollServer() {
-        fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
+        fetch('{{ ingress_entry }}/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
       }, 5000);
     } else if (data.error) {
       status.textContent = data.error;
-      btn.textContent = 'Check for updates';
+      btn.textContent = 'Upload update';
       btn.disabled = false;
     }
   } catch(e) {
@@ -241,18 +235,8 @@ async function runUpdate() {
       fetch('/health').then(function(r) { if (r.ok) location.reload(); else setTimeout(pollServer, 2000); }).catch(function() { setTimeout(pollServer, 2000); });
     }, 3000);
   }
-}
-
-// Check for updates on page load
-fetch('/update/check').then(function(r) { return r.json(); }).then(function(d) {
-  if (d.available) {
-    var btn = document.getElementById('update-btn');
-    btn.textContent = 'Update available';
-    btn.style.background = '#10b981';
-    btn.style.color = '#fff';
-    btn.style.borderColor = 'transparent';
+  input.value = '';
   }
-}).catch(function() {});
 
 async function runSync() {
   const btn = document.getElementById('sync-btn');

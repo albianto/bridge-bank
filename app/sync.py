@@ -377,39 +377,4 @@ def run():
     else:
         email_notify.send_success(total_added, successes)
 
-    # Check for updates silently
-    try:
-        _check_for_update()
-    except Exception:
-        pass
-
     return len(errors) == 0, total_added, "OK" if not errors else msg
-
-
-def _check_for_update():
-    """Check Docker Hub for a newer image and store result in DB."""
-    import subprocess, os, requests as _req
-    if not os.path.exists("/var/run/docker.sock"):
-        return
-    repo = "daalves/bridge-bank"
-    tag = "latest"
-    token_resp = _req.get(f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull", timeout=5)
-    token = token_resp.json().get("token", "")
-    manifest_resp = _req.head(
-        f"https://registry-1.docker.io/v2/{repo}/manifests/{tag}",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json",
-        },
-        timeout=5
-    )
-    remote_digest = manifest_resp.headers.get("Docker-Content-Digest", "")
-    local_digest = subprocess.run(
-        ["docker", "inspect", "--format", "{{index .RepoDigests 0}}", f"{repo}:{tag}"],
-        capture_output=True, text=True, timeout=10
-    ).stdout.strip()
-    local_sha = local_digest.split("@")[-1] if "@" in local_digest else ""
-    update_available = remote_digest != local_sha and remote_digest != ""
-    db.set_setting("update_available", "1" if update_available else "0")
-    if update_available:
-        log.info("Update available for %s", repo)

@@ -46,7 +46,8 @@ def _detect_container_name():
     return "bridge-bank"
 
 CONTAINER_NAME = _detect_container_name()
-IMAGE_NAME = "daalves/bridge-bank:latest"
+IMAGE_NAME = "albianto/bridge-bank:latest"
+DOCKER_SOCKET = os.environ.get("DOCKER_SOCKET", "/var/run/docker.sock")
 
 COUNTRIES = [
     ("AT","Austria"),("BE","Belgium"),("HR","Croatia"),("CY","Cyprus"),
@@ -804,75 +805,56 @@ def api_logs():
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Update preference + self-update
+# Manual update via image upload
 # ---------------------------------------------------------------------------
 
-@app.route("/update/check", methods=["GET"])
-def update_check():
-    import subprocess, os
-    if not os.path.exists("/var/run/docker.sock"):
-        return jsonify({"available": False})
-    try:
-        import requests as _req
-        repo = IMAGE_NAME.split(":")[0]
-        tag = IMAGE_NAME.split(":")[1] if ":" in IMAGE_NAME else "latest"
-        token_resp = _req.get(f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull", timeout=5)
-        token = token_resp.json().get("token", "")
-        # HEAD request for the manifest list digest — this matches what
-        # docker stores in RepoDigests after pulling a multi-arch image.
-        manifest_resp = _req.head(
-            f"https://registry-1.docker.io/v2/{repo}/manifests/{tag}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json",
-            },
-            timeout=5
-        )
-        remote_digest = manifest_resp.headers.get("Docker-Content-Digest", "")
-        local_digest = subprocess.run(
-            ["docker", "inspect", "--format", "{{index .RepoDigests 0}}", IMAGE_NAME],
-            capture_output=True, text=True, timeout=10
-        ).stdout.strip()
-        local_sha = local_digest.split("@")[-1] if "@" in local_digest else ""
-        # Also check if the pulled image differs from what the container is running
-        container_image = subprocess.run(
-            ["docker", "inspect", "--format", "{{.Image}}", CONTAINER_NAME],
-            capture_output=True, text=True, timeout=10
-        ).stdout.strip()
-        pulled_image_id = subprocess.run(
-            ["docker", "inspect", "--format", "{{.Id}}", IMAGE_NAME],
-            capture_output=True, text=True, timeout=10
-        ).stdout.strip()
-        container_outdated = container_image != pulled_image_id
-        available = (remote_digest != local_sha and remote_digest != "") or container_outdated
-        logger.info("Update check: remote=%s local=%s container_outdated=%s available=%s", remote_digest[:20], local_sha[:20], container_outdated, available)
-        return jsonify({"available": available})
-    except Exception as e:
-        logger.warning("Update check failed: %s", e)
-        return jsonify({"available": False})
-
-@app.route("/update/run", methods=["POST"])
-def update_run():
-    # Try Watchtower first (new setup), fall back to helper container (old setup)
-    import requests as _requests
-    try:
-        resp = _requests.get(
-            "http://bridge-bank-watchtower:8080/v1/update",
-            headers={"Authorization": "Bearer bridge-bank-update"},
-            timeout=120,
-        )
-        logger.info("Watchtower update response: %s %s", resp.status_code, resp.text.strip())
-        if resp.status_code == 200:
-            db.set_setting("update_available", "0")
-            return jsonify({"updating": True})
-    except Exception:
-        logger.info("Watchtower not available, falling back to helper container")
-    # Fallback: pull image and spawn a helper container to run docker compose
+@app.route("/update/upload", methods=["POST"])
+def update_upload():
+    """Accept a Docker image tar file, load it, and recreate the container."""
     import subprocess, os, json as _json
-    if not os.path.exists("/var/run/docker.sock"):
-        return jsonify({"error": "Docker socket not mounted."}), 400
+    if not os.path.exists(DOCKER_SOCKET):
+        return jsonify({"error": f"Docker socket not found at {DOCKER_SOCKET}. "
+                         "Set DOCKER_SOCKET env var or mount the socket."}), 400
+
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"error": "No file uploaded."}), 400
+
+    tar_path = "/tmp/bridge-bank-update.tar"
     try:
-        subprocess.run(["docker", "pull", IMAGE_NAME], capture_output=True, text=True, timeout=120)
+        f.save(tar_path)
+        logger.info("Saved uploaded image (%s) to %s", f.filename, tar_path)
+
+        # Load the image
+        result = subprocess.run(
+            ["docker", "load", "-i", tar_path],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode != 0:
+            logger.error("docker load failed: %s", result.stderr.strip())
+            return jsonify({"error": f"Failed to load image: {result.stderr.strip()}"}), 500
+        logger.info("docker load: %s", result.stdout.strip())
+
+        # Tag the loaded image as the expected IMAGE_NAME
+        # docker load output: "Loaded image: <name:tag>" or "Loaded image ID: sha256:..."
+        loaded_line = result.stdout.strip()
+        if "Loaded image:" in loaded_line:
+            loaded_ref = loaded_line.split("Loaded image:")[-1].strip()
+            if loaded_ref != IMAGE_NAME:
+                subprocess.run(
+                    ["docker", "tag", loaded_ref, IMAGE_NAME],
+                    capture_output=True, text=True, timeout=10
+                )
+                logger.info("Tagged %s as %s", loaded_ref, IMAGE_NAME)
+        elif "Loaded image ID:" in loaded_line:
+            loaded_id = loaded_line.split("Loaded image ID:")[-1].strip()
+            subprocess.run(
+                ["docker", "tag", loaded_id, IMAGE_NAME],
+                capture_output=True, text=True, timeout=10
+            )
+            logger.info("Tagged %s as %s", loaded_id, IMAGE_NAME)
+
+        # Recreate the container using docker compose
         mounts_json = subprocess.run(
             ["docker", "inspect", "--format", "{{json .Mounts}}", CONTAINER_NAME],
             capture_output=True, text=True, timeout=5
@@ -883,23 +865,29 @@ def update_run():
                 compose_host_path = m["Source"]
                 break
         if not compose_host_path:
-            return jsonify({"error": "Could not update. Try running: docker compose pull && docker compose up -d"}), 400
+            return jsonify({"error": "Image loaded but could not restart. Run: docker compose up -d --force-recreate"}), 400
+
         compose_file = f"{compose_host_path}/docker-compose.yml"
-        result = subprocess.run([
+        restart = subprocess.run([
             "docker", "run", "-d", "--rm",
-            "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "-v", f"{DOCKER_SOCKET}:/var/run/docker.sock",
             "-v", f"{compose_host_path}:{compose_host_path}:ro",
             IMAGE_NAME, "sh", "-c",
-            f"sleep 2 && docker compose -f '{compose_file}' up -d --force-recreate",
+            f"sleep 2 && docker compose -f '{compose_file}' up -d --force-recreate bridge-bank",
         ], capture_output=True, text=True, timeout=15)
-        if result.returncode != 0:
-            logger.error("Failed to start update helper: %s", result.stderr.strip())
-            return jsonify({"error": "Failed to start update. Try running: docker compose pull && docker compose up -d"}), 500
-        db.set_setting("update_available", "0")
+        if restart.returncode != 0:
+            logger.error("Failed to start update helper: %s", restart.stderr.strip())
+            return jsonify({"error": "Image loaded but restart failed. Run: docker compose up -d --force-recreate"}), 500
+
         return jsonify({"updating": True})
     except Exception as e:
-        logger.error("Fallback update failed: %s", e)
+        logger.error("Update upload failed: %s", e)
         return jsonify({"error": str(e)}), 500
+    finally:
+        try:
+            os.remove(tar_path)
+        except OSError:
+            pass
 
 _banks_cache = None
 
