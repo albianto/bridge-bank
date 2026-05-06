@@ -68,7 +68,6 @@
     </main>
   </div>
   <!-- Mobile bottom nav (hidden on desktop) -->
-  {% block nav %}
   <nav class="footer-nav">
     <a href="{{ ingress_entry }}/setup" {% if active == 'license' %}class="active"{% endif %}>License</a>
     <a href="{{ ingress_entry }}/setup/actual" {% if active == 'actual' %}class="active"{% endif %}>Actual Budget</a>
@@ -76,6 +75,5 @@
     <a href="{{ ingress_entry }}/bank" {% if active == 'bank' %}class="active"{% endif %}>Bank</a>
     <a href="{{ ingress_entry }}/status" {% if active == 'status' %}class="active"{% endif %}>Status</a>
   </nav>
-  {% endblock %}
 </body>
 </html>
