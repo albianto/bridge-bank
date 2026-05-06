@@ -18,7 +18,8 @@ def _patch_actualpy():
     try:
         import actual.database as _adb
         import actual as _actual_mod
-        from sqlalchemy import Column, insert
+        from sqlalchemy import Column
+        from sqlalchemy.dialects.sqlite import insert
 
         def _patched_apply_change(session, table, table_id, values):
             set_dict = {
