@@ -11,5 +11,3 @@ services:
       - .:/compose:ro
     ports:
       - "3002:3000"
-    environment:
-      - TZ=Europe/Lisbon

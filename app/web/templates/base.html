@@ -75,5 +75,8 @@
     <a href="{{ ingress_entry }}/bank" {% if active == 'bank' %}class="active"{% endif %}>Bank</a>
     <a href="{{ ingress_entry }}/status" {% if active == 'status' %}class="active"{% endif %}>Status</a>
   </nav>
+<script>
+(function(){var tz=Intl.DateTimeFormat().resolvedOptions().timeZone;if(tz)fetch('{{ ingress_entry }}/api/timezone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tz:tz})});})();
+</script>
 </body>
 </html>

@@ -29,6 +29,7 @@ SMTP_FROM            = ""
 NOTIFY_ON            = "all"
 NOTIFY_ENABLED       = "false"
 BRIDGE_BANK_URL      = "https://localhost:3000"
+TIMEZONE             = ""
 
 def _load():
     """Load config from HA add-on options, then config.json, then environment variables."""
