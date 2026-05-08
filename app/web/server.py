@@ -507,6 +507,7 @@ def bank():
     days_left    = _get_days_left()
     success      = request.args.get("success")
     pem_ready    = bool(db.get_setting("eb_pem_content") or __import__('os').path.exists("/data/private.pem"))
+    has_pending_accounts = bool(db.get_setting("pending_auth_accounts"))
 
     return render_template("bank.html",
         error=error,
@@ -517,6 +518,7 @@ def bank():
         pem_ready=pem_ready,
         eb_app_id=config.EB_APPLICATION_ID or db.get_setting("eb_app_id"),
         today=__import__('datetime').date.today().isoformat(),
+        has_pending_accounts=has_pending_accounts,
         active="bank",
     )
 
